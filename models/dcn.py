@@ -125,6 +125,7 @@ class CrossLayer(tf.keras.layers.Layer):
         self.built = True
 
     def call(self, x_0, x_l):
-        outputs = x_0 * (tf.matmul(x_l, self.W) + self.b) + x_l
-
-        return outputs
+        return x_0 * (tf.matmul(x_l, self.W) + self.b) + x_l
+    
+    def compute_output_shape(self, input_shape):
+        return input_shape

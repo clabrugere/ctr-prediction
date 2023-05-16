@@ -179,3 +179,6 @@ class CrossLayerV2(tf.keras.layers.Layer):
         outputs = tf.add_n(expert_outputs) + x_l
 
         return outputs
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
