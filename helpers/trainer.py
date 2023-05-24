@@ -8,14 +8,13 @@ def train(
     ds_train,
     ds_val,
     epochs=20,
-    lr=0.1,
-    min_lr=1e-6,
+    learning_rate=0.1,
     verbose=1,
     return_train_time=False,
 ):
 
     tf.keras.backend.clear_session()
-    opt = tf.keras.optimizers.legacy.Adam(learning_rate=lr)
+    opt = tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate)
 
     model.compile(
         optimizer=opt,

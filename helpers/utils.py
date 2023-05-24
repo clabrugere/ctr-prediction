@@ -2,7 +2,6 @@ from collections import defaultdict
 
 import matplotlib.pyplot as plt
 import seaborn as sns
-import pandas as pd
 import numpy as np
 import tensorflow as tf
 from sklearn.metrics import (
@@ -58,7 +57,7 @@ def benchmark(models, ds_train, ds_val, ds_test, epochs=10, lr=0.1, predict_batc
 
             model.set_weights(weights)
 
-            _, durations, _ = train(model, ds_train, ds_val, epochs=epochs, lr=lr, verbose=0, return_train_time=True)
+            _, durations, _ = train(model, ds_train, ds_val, epochs=epochs, learning_rate=lr, verbose=0, return_train_time=True)
             y_pred = model.predict(X_test, batch_size=predict_batch_size)
 
             results[model.name]["r2"].append(r2_score(y_test, y_pred))
@@ -70,14 +69,3 @@ def benchmark(models, ds_train, ds_val, ds_test, epochs=10, lr=0.1, predict_batc
             results[model.name]["mean_epoch_duration"].append(np.mean(durations))
 
     return results
-
-
-def results_to_df(results):
-    result_df = {}
-    for k, v in results.items():
-        cols = list(v.keys())
-        metrics = list(v.values())
-
-        result_df[k] = metrics
-
-    return pd.DataFrame.from_dict(result_df, orient="index", columns=cols)

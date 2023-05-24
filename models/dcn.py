@@ -1,4 +1,8 @@
 import tensorflow as tf
+from models.mlp import MLP
+
+
+__CROSS_VARIANTS = ["cross", "cross_mix"]
 
 
 class DCN(tf.keras.Model):
@@ -8,14 +12,20 @@ class DCN(tf.keras.Model):
         num_embedding,
         dim_embedding=8,
         num_interaction=2,
+        num_expert=1,
+        dim_low=32,
         num_hidden=2,
         dim_hidden=16,
-        regularization=0.00001,
+        regularization=1e-5,
         dropout=0.0,
         parallel_mlp=True,
+        cross_type="cross_mix",
         name="DCN",
     ):
-        super().__init__(name=f"{name}_parallel" if parallel_mlp else name)
+        super().__init__(name=name)
+
+        if cross_type not in __CROSS_VARIANTS:
+            raise ValueError(f"'cross_layer' argument must be one of {__CROSS_VARIANTS}")
 
         self.parallel_mlp = parallel_mlp
         self.dim_input = dim_input
@@ -30,21 +40,17 @@ class DCN(tf.keras.Model):
             name="embedding",
         )
 
-        # MLP
-        self.interaction_mlp = tf.keras.Sequential(name="MLP")
-        for _ in range(num_hidden):
-            self.interaction_mlp.add(tf.keras.layers.Dense(dim_hidden))
-            self.interaction_mlp.add(tf.keras.layers.BatchNormalization())
-            self.interaction_mlp.add(tf.keras.layers.ReLU())
-            self.interaction_mlp.add(tf.keras.layers.Dropout(dropout))
-
         # interaction layer
         self.interaction_cross = []
-        for _ in range(num_interaction):
-            self.interaction_cross.append(
-                #tf.keras.layers.Dense(dim_input * dim_embedding, name=f"interaction_layer_{i+1}")
-                CrossLayer()
-            )
+        if cross_type == "cross_mix":
+            for _ in range(num_interaction):
+                self.interaction_cross.append(CrossLayerV2(dim_low=dim_low, num_expert=num_expert))
+        else:
+            for _ in range(num_interaction):
+                self.interaction_cross.append(CrossLayer())
+
+        # interaction layer using MLP
+        self.interaction_mlp = MLP(num_hidden=num_hidden, dim_hidden=dim_hidden, dropout=dropout)
 
         # final projection head
         self.projection_head = tf.keras.layers.Dense(1, name="projection_head")
@@ -58,12 +64,9 @@ class DCN(tf.keras.Model):
         # (batch_size, dim_input * dim_embedding)
         embeddings = tf.reshape(embeddings, (-1, self.dim_input * self.dim_embedding))
 
-        # interaction is defined as x_0 * Dense(x) + x
-        interaction_in = embeddings
+        interaction_out = embeddings
         for interaction in self.interaction_cross:
-            # (batch_size, dim_input * dim_embedding)
-            interaction_out = interaction(embeddings, interaction_in)
-            interaction_in = interaction_out
+            interaction_out = interaction(embeddings, interaction_out)  # (batch_size, dim_input * dim_embedding)
 
         if self.parallel_mlp:
             latent_mlp = self.interaction_mlp(embeddings, training=training)  # (batch_size, dim_hidden)
@@ -126,6 +129,107 @@ class CrossLayer(tf.keras.layers.Layer):
 
     def call(self, x_0, x_l):
         return x_0 * (tf.matmul(x_l, self.W) + self.b) + x_l
-    
-    def compute_output_shape(self, input_shape):
-        return input_shape
+
+
+class CrossLayerV2(tf.keras.layers.Layer):
+    def __init__(
+        self,
+        dim_low,
+        num_expert=1,
+        activation="relu",
+        weights_initializer="glorot_uniform",
+        weights_regularizer=None,
+        weights_contraint=None,
+        bias_initializer="zeros",
+        bias_regularizer=None,
+        bias_constraint=None,
+    ):
+        super().__init__()
+
+        self.dim_low = dim_low
+        self.num_experts = num_expert
+        self.activation = tf.keras.activations.get(activation)
+
+        self.weights_initializer = weights_initializer
+        self.weights_regularizer = weights_regularizer
+        self.weights_contraint = weights_contraint
+
+        self.bias_initializer = bias_initializer
+        self.bias_regularizer = bias_regularizer
+        self.bias_constraint = bias_constraint
+
+    def build(self, input_shape):
+        input_shape = tf.TensorShape(input_shape)
+        dim_last = tf.compat.dimension_value(input_shape[-1])
+        self.experts = []
+
+        for i in range(self.num_experts):
+            U = self.add_weight(
+                name=f"U_{i}",
+                shape=(dim_last, self.dim_low),
+                initializer=self.weights_initializer,
+                regularizer=self.weights_regularizer,
+                constraint=self.weights_contraint,
+                dtype=self.dtype,
+                trainable=True,
+            )
+            V = self.add_weight(
+                name=f"V_{i}",
+                shape=(dim_last, self.dim_low),
+                initializer=self.weights_initializer,
+                regularizer=self.weights_regularizer,
+                constraint=self.weights_contraint,
+                dtype=self.dtype,
+                trainable=True,
+            )
+            C = self.add_weight(
+                name=f"C_{i}",
+                shape=(self.dim_low, self.dim_low),
+                initializer=self.weights_initializer,
+                regularizer=self.weights_regularizer,
+                constraint=self.weights_contraint,
+                dtype=self.dtype,
+                trainable=True,
+            )
+            bias = self.add_weight(
+                name=f"bias_{i}",
+                shape=(dim_last,),
+                initializer=self.bias_initializer,
+                regularizer=self.bias_regularizer,
+                constraint=self.bias_constraint,
+                dtype=self.dtype,
+                trainable=True,
+            )
+            gate_projection = tf.keras.layers.Dense(1, use_bias=False)
+
+            self.experts.append((U, V, C, bias, gate_projection))
+
+        self.built = True
+
+    def call(self, x_0, x_l):
+        # x_0 and x_l are of shape (batch_size, dim_input * dim_embedding = dim_last)
+        expert_outputs = []
+        for U, V, C, bias, gate_projection in self.experts:
+            # project input in a low dimensional space and pass through non linearity
+            # a(x_l @ V)) -> (batch_size, dim_low)
+            low_rank_proj = self.activation(tf.matmul(x_l, V))
+
+            # project into an intermediate space with same dimension
+            # a( a(x_l @ V) @ C ) -> (batch_size, dim_low)
+            low_rank_inter = self.activation(tf.matmul(low_rank_proj, C))
+
+            # project back to initial space
+            # E(x_0, x_l) = x_0 * ( a( a(x_l @ V) @ C ) @ U + b )  -> (batch_size, dim_last)
+            expert_output = x_0 * tf.matmul(low_rank_inter, U, transpose_b=True) + bias
+
+            # weight the expert representation
+            # G(x_l) * E(x_0, x_l) -> (batch_size, dim_last)
+            gate_score = tf.nn.sigmoid(gate_projection(x_l))
+            expert_output = gate_score * expert_output
+
+            expert_outputs.append(expert_output)
+
+        # sum representations and add residual connection
+        outputs = tf.add_n(expert_outputs) + x_l
+
+        return outputs
