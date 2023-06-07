@@ -76,6 +76,7 @@ class FinalMLP(tf.keras.Model):
         dim_hidden_1=64,
         num_hidden_2=2,
         dim_hidden_2=64,
+        num_heads=1,
         dropout=0.0,
         name="FinalMLP",
     ):
@@ -117,7 +118,7 @@ class FinalMLP(tf.keras.Model):
         )
 
         # final aggregation layer
-        self.aggregation = Aggregation(dim_latent_1=dim_hidden_1, dim_latent_2=dim_hidden_2, num_heads=4)
+        self.aggregation = Aggregation(dim_latent_1=dim_hidden_1, dim_latent_2=dim_hidden_2, num_heads=num_heads)
 
         self.build(input_shape=(None, dim_input))
 
