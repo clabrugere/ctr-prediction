@@ -6,6 +6,7 @@ from models.pytorch.mlp import MLP
 
 __AGGREGATION_MODES = ["add", "concat"]
 
+
 class AttentionInteraction(nn.Module):
     def __init__(self, dim_embedding, num_layers, num_heads=1, dropout=0.0, **attn_kwargs):
         self.layers = nn.ModuleList()
@@ -45,10 +46,10 @@ class AutoInt(nn.Module):
         aggregation_mode="add",
     ):
         super().__init__()
-        
+
         if aggregation_mode not in __AGGREGATION_MODES:
             raise ValueError(f"'aggregation_mode' must be one of {__AGGREGATION_MODES}")
-        
+
         self.dim_input = dim_input
         self.dim_embedding = dim_embedding
         self.aggregation_mode = aggregation_mode

@@ -70,7 +70,6 @@ class FinalMLP(tf.keras.Model):
         dim_input,
         num_embedding,
         dim_embedding=8,
-        regularization=0.00001,
         dim_hidden_fs=64,
         num_hidden_1=2,
         dim_hidden_1=64,
@@ -90,7 +89,6 @@ class FinalMLP(tf.keras.Model):
             input_dim=num_embedding,
             output_dim=dim_embedding,
             input_length=dim_input,
-            embeddings_regularizer=tf.keras.regularizers.l2(regularization),
             name="embedding",
         )
 
