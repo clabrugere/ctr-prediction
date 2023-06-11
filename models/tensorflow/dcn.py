@@ -53,8 +53,6 @@ class DCN(tf.keras.Model):
         # final projection head
         self.projection_head = tf.keras.layers.Dense(1, name="projection_head")
 
-        self.build(input_shape=(None, dim_input))
-
     def call(self, inputs, training=False):
         embeddings = self.embedding(inputs, training=training)  # (bs, dim_input, dim_emb)
         embeddings = tf.reshape(embeddings, (-1, self.dim_input * self.dim_embedding))  # (bs, dim_input * dim_emb)
@@ -205,15 +203,15 @@ class CrossLayerV2(tf.keras.layers.Layer):
         expert_outputs = []
         for U, V, C, bias in self.experts:
             # project input in a low dimensional space and pass through non linearity
-            # a(x_l @ V)) -> (batch_size, dim_low)
+            # a(x_l @ V)) -> (bs, dim_low)
             low_rank_proj = self.activation(tf.matmul(x_l, V))
 
             # project into an intermediate space with same dimension
-            # a( a(x_l @ V) @ C ) -> (batch_size, dim_low)
+            # a( a(x_l @ V) @ C ) -> (bs, dim_low)
             low_rank_inter = self.activation(tf.matmul(low_rank_proj, C))
 
             # project back to initial space
-            # E(x_0, x_l) = x_0 * ( a( a(x_l @ V) @ C ) @ U + b )  -> (batch_size, dim_last)
+            # E(x_0, x_l) = x_0 * ( a( a(x_l @ V) @ C ) @ U + b )  -> (bs, dim_last)
             expert_output = x_0 * tf.matmul(low_rank_inter, U, transpose_b=True) + bias
             
             expert_outputs.append(expert_output)

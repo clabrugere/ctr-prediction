@@ -5,6 +5,31 @@ from models.tensorflow.mlp import MLP
 __AGGREGATION_MODES = ["add", "concat"]
 
 
+class AttentionInteraction(tf.keras.Model):
+    def __init__(self, num_layer, num_heads, dim_key, dropout=0.0):
+        self.layers = []
+        for i in range(num_layer):
+            self.layers.append(
+                (
+                    tf.keras.layers.MultiHeadAttention(
+                        num_heads=num_heads,
+                        key_dim=dim_key,
+                        dropout=dropout,
+                        name=f"interaction_layer_{i+1}",
+                    ),
+                    tf.keras.layers.LayerNormalization(),
+                )
+            )
+
+    def call(self, inputs, training=False):
+        attn_out = inputs  # (bs, dim_input, dim_emb)
+        for mha_layer, layer_norm in self.layers:
+            attn_out = mha_layer(attn_out, attn_out, training=training) + attn_out
+            attn_out = layer_norm(attn_out)  # (bs, dim_input, dim_emb)
+
+        return attn_out
+
+
 class AutoInt(tf.keras.Model):
     def __init__(
         self,
@@ -46,35 +71,19 @@ class AutoInt(tf.keras.Model):
         )
 
         # interaction layer using stacked self-attention
-        self.interaction_attention = []
-        for i in range(num_attention):
-            self.interaction_attention.append(
-                (
-                    tf.keras.layers.MultiHeadAttention(
-                        num_heads=num_heads,
-                        key_dim=dim_key,
-                        dropout=dropout,
-                        name=f"interaction_layer_{i+1}",
-                    ),
-                    tf.keras.layers.LayerNormalization(),
-                )
-            )
+        self.interaction_attention = AttentionInteraction(
+            num_attention, num_heads=num_heads, dim_key=dim_key, dropout=dropout
+        )
 
         if aggregation_mode == "add":
             self.attn_projection_head = tf.keras.layers.Dense(1, name="attn_projection_head")
         elif aggregation_mode == "concat":
             self.projection_head = tf.keras.layers.Dense(1, name="projection_head")
 
-        self.build(input_shape=(None, dim_input))
-
     def call(self, inputs, training=False):
         embeddings = self.embedding(inputs, training=training)  # (bs, dim_input, dim_emb)
 
-        attn_out = embeddings
-        for interaction_layer, layer_norm in self.interaction_attention:
-            attn_out = interaction_layer(attn_out, attn_out, training=training) + attn_out
-            attn_out = layer_norm(attn_out)  # (bs, dim_input, dim_emb)
-
+        attn_out = self.interaction_attention(embeddings, training=training)
         attn_out = tf.reshape(attn_out, (-1, self.dim_input * self.dim_embedding))  # (bs, dim_input * dim_emb)
 
         mlp_out = tf.reshape(embeddings, (-1, self.dim_input * self.dim_embedding))  # (bs, dim_input, dim_emb)

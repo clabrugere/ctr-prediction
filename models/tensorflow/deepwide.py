@@ -18,7 +18,7 @@ class DeepWide(tf.keras.Model):
         self.dim_input = dim_input
         self.dim_emb = dim_embedding
 
-        # embedding layers
+        # embedding layer
         self.embedding = tf.keras.layers.Embedding(
             input_dim=num_embedding,
             output_dim=dim_embedding,
@@ -26,7 +26,7 @@ class DeepWide(tf.keras.Model):
             name="embedding",
         )
 
-        # wide part which is a linear model without bias
+        # wide part
         self.wide = tf.keras.layers.Embedding(
             input_dim=num_embedding,
             output_dim=1,
@@ -34,13 +34,11 @@ class DeepWide(tf.keras.Model):
             name="wide_emb",
         )
 
-        # interaction layer using MLP
+        # deep part
         self.interaction_mlp = MLP(num_hidden=num_hidden, dim_hidden=dim_hidden, dim_out=1, dropout=dropout)
 
         # final layer
         self.projection_head = tf.keras.layers.Dense(1, name="projection_head")
-
-        self.build(input_shape=(None, dim_input))
 
     def call(self, inputs, training=False):
         embeddings = self.embedding(inputs, training=training)  # (bs, dim_input, dim_emb)
