@@ -28,10 +28,10 @@ class FeatureSelection(tf.keras.Model):
 
     def call(self, embeddings, training=False):
         # embeddings is of shape (batch_size, dim_feature)
-        gate_score_1 = self.gate_1(self.gate_1_bias, training=training)  # (bs, dim_feature)
+        gate_score_1 = self.gate_1(self.gate_1_bias, training=training)  # (1, dim_feature)
         out_1 = 2.0 * tf.nn.sigmoid(gate_score_1) * embeddings  # (bs, dim_feature)
 
-        gate_score_2 = self.gate_2(self.gate_2_bias, training=training)  # (bs, dim_feature)
+        gate_score_2 = self.gate_2(self.gate_2_bias, training=training)  # (1, dim_feature)
         out_2 = 2.0 * tf.nn.sigmoid(gate_score_2) * embeddings  # (bs, dim_feature)
 
         return out_1, out_2  # (bs, dim_feature), (bs, dim_feature)
@@ -99,7 +99,7 @@ class FinalMLP(tf.keras.Model):
             dim_feature=dim_input * dim_embedding,
             dim_gate=dim_input,
             dim_hidden=dim_hidden_fs,
-            dropout=0.0,
+            dropout=dropout,
         )
 
         # branch 1

@@ -31,10 +31,10 @@ class FeatureSelection(nn.Module):
 
     def forward(self, embeddings):
         # embeddings is of shape (bs, dim_feature)
-        gate_score_1 = self.gate_1(self.gate_1_bias)  # (bs, dim_feature)
+        gate_score_1 = self.gate_1(self.gate_1_bias)  # (1, dim_feature)
         out_1 = 2.0 * F.sigmoid(gate_score_1) * embeddings  # (bs, dim_feature)
 
-        gate_score_2 = self.gate_2(self.gate_2_bias)  # (bs, dim_feature)
+        gate_score_2 = self.gate_2(self.gate_2_bias)  # (1, dim_feature)
         out_2 = 2.0 * F.sigmoid(gate_score_2) * embeddings  # (bs, dim_feature)
 
         return out_1, out_2  # (bs, dim_feature), (bs, dim_feature)
@@ -96,7 +96,7 @@ class FinalMLP(nn.Module):
             dim_feature=dim_input * dim_embedding,
             dim_gate=dim_input,
             dim_hidden=dim_hidden_fs,
-            dropout=0.0,
+            dropout=dropout,
         )
 
         # branch 1
