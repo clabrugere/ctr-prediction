@@ -10,20 +10,22 @@ class FeatureSelection(nn.Module):
         super().__init__()
 
         self.gate_1 = MLP(
-            dim_in=dim_feature,
+            dim_in=dim_gate,
             num_hidden=num_hidden,
             dim_hidden=dim_hidden,
             dim_out=dim_feature,
             dropout=dropout,
+            batch_norm=False,
         )
         self.gate_1_bias = nn.Parameter(torch.ones(1, dim_gate))
 
         self.gate_2 = MLP(
-            dim_in=dim_feature,
+            dim_in=dim_gate,
             num_hidden=num_hidden,
             dim_hidden=dim_hidden,
             dim_out=dim_feature,
             dropout=dropout,
+            batch_norm=False,
         )
         self.gate_2_bias = nn.Parameter(torch.ones(1, dim_gate))
 
@@ -72,7 +74,7 @@ class FinalMLP(nn.Module):
         self,
         dim_input,
         num_embedding,
-        dim_embedding=8,
+        dim_embedding=32,
         dim_hidden_fs=64,
         num_hidden_1=2,
         dim_hidden_1=64,
@@ -121,8 +123,8 @@ class FinalMLP(nn.Module):
             num_heads=num_heads,
         )
 
-    def call(self, inputs, training=False):
-        embeddings = self.embedding(inputs, training=training)  # (bs, num_emb, dim_emb)
+    def forward(self, inputs):
+        embeddings = self.embedding(inputs)  # (bs, num_emb, dim_emb)
         embeddings = torch.reshape(embeddings, (-1, self.dim_input * self.dim_embedding))  # (bs, num_emb * dim_emb)
 
         # weight features of the two streams using a gating mechanism
