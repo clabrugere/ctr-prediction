@@ -122,19 +122,19 @@ class CrossLayerV2(nn.Module):
             gate = nn.Parameter(torch.ones(num_expert))
             self.layers.append((experts, gate))
 
-        self.reset_parameters()
+        self._reset_parameters()
 
-    def reset_parameters(self):
+    def _reset_parameters(self):
         for experts, _ in self.layers:
             for V, C, U, b in experts:
-                torch.nn.init.kaiming_uniform_(V, nonlinearity="relu")
-                torch.nn.init.kaiming_uniform_(C, nonlinearity="relu")
-                torch.nn.init.kaiming_uniform_(U, nonlinearity="relu")
+                nn.init.kaiming_uniform_(V, nonlinearity="relu")
+                nn.init.kaiming_uniform_(C, nonlinearity="relu")
+                nn.init.kaiming_uniform_(U, nonlinearity="relu")
 
                 # bias
-                fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(U)
+                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(U)
                 bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-                torch.nn.init.uniform_(b, -bound, bound)
+                nn.init.uniform_(b, -bound, bound)
 
     def forward(self, inputs):
         # x : (bs, d)

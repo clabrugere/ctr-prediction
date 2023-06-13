@@ -45,23 +45,24 @@ class Aggregation(tf.keras.Model):
         self.dim_head_1 = dim_latent_1 // num_heads
         self.dim_head_2 = dim_latent_2 // num_heads
 
-        self.w_1 = tf.keras.layers.Dense(1)
-        self.w_2 = tf.keras.layers.Dense(1)
+        self.w_1 = self.add_weight(shape=(self.dim_head_1, num_heads, 1), initializer="glorot_uniform", trainable=True)
+        self.w_2 = self.add_weight(shape=(self.dim_head_2, num_heads, 1), initializer="glorot_uniform", trainable=True)
         self.w_12 = self.add_weight(
-            shape=(num_heads, self.dim_head_1, self.dim_head_2, 1), initializer="glorot_normal", trainable=True
+            shape=(num_heads, self.dim_head_1, self.dim_head_2, 1), initializer="glorot_uniform", trainable=True
         )
+        self.bias = self.add_weight(shape=(1, num_heads, 1), initializer="zeros", trainable=True)
 
     def call(self, latent_1, latent_2):
         # bilinear aggregation of the two latent representations
         # y = b + w_1.T o_1 + w_2.T o_2 + o_1.T W_3 o_2
-        first_order = self.w_1(latent_1) + self.w_2(latent_2)  # (bs, 1)
-
         latent_1 = tf.reshape(latent_1, (-1, self.num_heads, self.dim_head_1))  # (bs, num_heads, dim_head_1)
         latent_2 = tf.reshape(latent_2, (-1, self.num_heads, self.dim_head_2))  # (bs, num_heads, dim_head_2)
-        second_order = tf.einsum("bhi,hijo,bhj->bho", latent_1, self.w_12, latent_2)  # (bs, num_heads, 1)
-        second_order = tf.reduce_sum(second_order, 1)  # (bs, 1)
 
-        out = first_order + second_order  # (bs, 1)
+        first_order = tf.einsum("bhi,iho->bho", latent_1, self.w_1)  # (bs, num_heads, 1)
+        first_order += tf.einsum("bhi,iho->bho", latent_2, self.w_2)  # (bs, num_heads, 1)
+        second_order = tf.einsum("bhi,hijo,bhj->bho", latent_1, self.w_12, latent_2)  # (bs, num_heads, 1)
+
+        out = tf.reduce_sum(first_order + second_order + self.bias, 1)  # (bs, 1)
 
         return out
 
