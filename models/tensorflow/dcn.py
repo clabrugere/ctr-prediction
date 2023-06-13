@@ -78,21 +78,12 @@ class CrossLayer(tf.keras.layers.Layer):
     def __init__(
         self,
         weights_initializer="glorot_uniform",
-        weights_regularizer=None,
-        weights_contraint=None,
         bias_initializer="zeros",
-        bias_regularizer=None,
-        bias_constraint=None,
     ):
         super().__init__()
 
         self.weights_initializer = weights_initializer
-        self.weights_regularizer = weights_regularizer
-        self.weights_contraint = weights_contraint
-
         self.bias_initializer = bias_initializer
-        self.bias_regularizer = bias_regularizer
-        self.bias_constraint = bias_constraint
 
     def build(self, input_shape):
         input_shape = tf.TensorShape(input_shape)
@@ -102,8 +93,6 @@ class CrossLayer(tf.keras.layers.Layer):
             name="weights",
             shape=(dim_last, dim_last),
             initializer=self.weights_initializer,
-            regularizer=self.weights_regularizer,
-            constraint=self.weights_contraint,
             dtype=self.dtype,
             trainable=True,
         )
@@ -111,8 +100,6 @@ class CrossLayer(tf.keras.layers.Layer):
             name="bias",
             shape=(dim_last,),
             initializer=self.bias_initializer,
-            regularizer=self.bias_regularizer,
-            constraint=self.bias_constraint,
             dtype=self.dtype,
             trainable=True,
         )
@@ -130,25 +117,15 @@ class CrossLayerV2(tf.keras.layers.Layer):
         num_expert=1,
         activation="relu",
         weights_initializer="glorot_uniform",
-        weights_regularizer=None,
-        weights_contraint=None,
         bias_initializer="zeros",
-        bias_regularizer=None,
-        bias_constraint=None,
     ):
         super().__init__()
 
         self.dim_low = dim_low
         self.num_experts = num_expert
         self.activation = tf.keras.activations.get(activation)
-
         self.weights_initializer = weights_initializer
-        self.weights_regularizer = weights_regularizer
-        self.weights_contraint = weights_contraint
-
         self.bias_initializer = bias_initializer
-        self.bias_regularizer = bias_regularizer
-        self.bias_constraint = bias_constraint
 
     def build(self, input_shape):
         input_shape = tf.TensorShape(input_shape)
@@ -160,8 +137,6 @@ class CrossLayerV2(tf.keras.layers.Layer):
                 name=f"U_{i}",
                 shape=(dim_last, self.dim_low),
                 initializer=self.weights_initializer,
-                regularizer=self.weights_regularizer,
-                constraint=self.weights_contraint,
                 dtype=self.dtype,
                 trainable=True,
             )
@@ -169,8 +144,6 @@ class CrossLayerV2(tf.keras.layers.Layer):
                 name=f"V_{i}",
                 shape=(dim_last, self.dim_low),
                 initializer=self.weights_initializer,
-                regularizer=self.weights_regularizer,
-                constraint=self.weights_contraint,
                 dtype=self.dtype,
                 trainable=True,
             )
@@ -178,8 +151,6 @@ class CrossLayerV2(tf.keras.layers.Layer):
                 name=f"C_{i}",
                 shape=(self.dim_low, self.dim_low),
                 initializer=self.weights_initializer,
-                regularizer=self.weights_regularizer,
-                constraint=self.weights_contraint,
                 dtype=self.dtype,
                 trainable=True,
             )
@@ -187,8 +158,6 @@ class CrossLayerV2(tf.keras.layers.Layer):
                 name=f"bias_{i}",
                 shape=(dim_last,),
                 initializer=self.bias_initializer,
-                regularizer=self.bias_regularizer,
-                constraint=self.bias_constraint,
                 dtype=self.dtype,
                 trainable=True,
             )
