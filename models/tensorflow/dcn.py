@@ -118,12 +118,14 @@ class CrossLayerV2(tf.keras.layers.Layer):
         activation="relu",
         weights_initializer="glorot_uniform",
         bias_initializer="zeros",
+        gate_function="softmax"
     ):
         super().__init__()
 
         self.dim_low = dim_low
         self.num_experts = num_expert
         self.activation = tf.keras.activations.get(activation)
+        self.gate_function = tf.keras.activations.get(gate_function)
         self.weights_initializer = weights_initializer
         self.bias_initializer = bias_initializer
 
@@ -186,7 +188,7 @@ class CrossLayerV2(tf.keras.layers.Layer):
             expert_outputs.append(expert_output)
 
         # aggregate expert representations and add residual connection
-        gate_score = tf.keras.activations.softmax(self.gate, axis=0)
+        gate_score = self.gate_function(self.gate, axis=0)
         expert_outputs = tf.stack(expert_outputs, axis=-1)
         outputs = tf.squeeze(tf.matmul(expert_outputs, gate_score), axis=-1) + x_l
 
