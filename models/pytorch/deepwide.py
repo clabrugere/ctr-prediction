@@ -22,7 +22,7 @@ class DeepWide(nn.Module):
         self.embedding = nn.Embedding(num_embeddings=num_embedding, embedding_dim=dim_embedding)
         self.wide = nn.Embedding(num_embeddings=num_embedding, embedding_dim=1)
         
-        self.interaction_mlp = MLP(
+        self.deep = MLP(
             dim_in=dim_input * dim_embedding, 
             num_hidden=num_hidden, 
             dim_hidden=dim_hidden, 
@@ -34,7 +34,7 @@ class DeepWide(nn.Module):
         embeddings = self.embedding(inputs)  # (bs, num_emb, dim_emb)
         embeddings = torch.reshape(embeddings, (-1, self.dim_input * self.dim_embedding))  # (bs, num_emb * dim_emb)
 
-        latent_deep = self.interaction_mlp(embeddings)  # (bs, 1)
+        latent_deep = self.deep(embeddings)  # (bs, 1)
         latent_wide = torch.sum(self.wide(inputs), dim=1)  # (bs, 1)
 
         logits = latent_deep + latent_wide # (bs, 1)

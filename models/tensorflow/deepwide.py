@@ -35,7 +35,7 @@ class DeepWide(tf.keras.Model):
         )
 
         # deep part
-        self.interaction_mlp = MLP(num_hidden=num_hidden, dim_hidden=dim_hidden, dim_out=1, dropout=dropout)
+        self.deep = MLP(num_hidden=num_hidden, dim_hidden=dim_hidden, dim_out=1, dropout=dropout)
 
         # final layer
         self.projection_head = tf.keras.layers.Dense(1, name="projection_head")
@@ -45,7 +45,7 @@ class DeepWide(tf.keras.Model):
         embeddings = tf.reshape(embeddings, (-1, self.dim_input * self.dim_emb))  # (bs, dim_input * dim_emb)
 
         latent_wide = tf.reduce_sum(self.wide(inputs, training=training), axis=1)  # (bs, 1)
-        latent_deep = self.interaction_mlp(embeddings, training=training)  # (bs, 1)
+        latent_deep = self.deep(embeddings, training=training)  # (bs, 1)
 
         logits = latent_deep + latent_wide  # (bs, 1)
         output = tf.nn.sigmoid(logits)  # (bs, 1)
