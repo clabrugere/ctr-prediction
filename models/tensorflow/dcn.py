@@ -124,8 +124,8 @@ class CrossLayerV2(tf.keras.layers.Layer):
 
         self.dim_low = dim_low
         self.num_experts = num_expert
+        self.gate_function = gate_function
         self.activation = tf.keras.activations.get(activation)
-        self.gate_function = tf.keras.activations.get(gate_function)
         self.weights_initializer = weights_initializer
         self.bias_initializer = bias_initializer
 
@@ -164,8 +164,8 @@ class CrossLayerV2(tf.keras.layers.Layer):
                 trainable=True,
             )
             self.experts.append((U, V, C, bias))
-            
-        self.gate = self.add_weight(shape=(self.num_experts, 1), dtype=self.dtype, trainable=True)
+        
+        self.gate = tf.keras.layers.Dense(self.num_experts, activation=self.gate_function, use_bias=False)
 
         self.built = True
 
@@ -187,9 +187,9 @@ class CrossLayerV2(tf.keras.layers.Layer):
             
             expert_outputs.append(expert_output)
 
-        # aggregate expert representations and add residual connection
-        gate_score = self.gate_function(self.gate, axis=0)
+        # aggregate expert representations using gate score and add residual connection
+        gate_score = self.gate(x_0) # (bs, num_experts)
         expert_outputs = tf.stack(expert_outputs, axis=-1)
-        outputs = tf.squeeze(tf.matmul(expert_outputs, gate_score), axis=-1) + x_l
+        outputs = tf.einsum("bie,be->bi", expert_outputs, gate_score) + x_l
 
         return outputs

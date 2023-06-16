@@ -7,7 +7,7 @@ class MLP(tf.keras.Model):
 
         self.dim_out = dim_out
         self.blocks = tf.keras.Sequential(name="MLP")
-        for _ in range(num_hidden):
+        for _ in range(num_hidden - 1):
             self.blocks.add(tf.keras.layers.Dense(dim_hidden))
 
             if batch_norm:
@@ -18,6 +18,8 @@ class MLP(tf.keras.Model):
 
         if dim_out:
             self.blocks.add(tf.keras.layers.Dense(dim_out))
+        else:
+            self.blocks.add(tf.keras.layers.Dense(dim_hidden))
 
     def call(self, inputs, training=False):
         out = self.blocks(inputs, training=training)
