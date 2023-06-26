@@ -21,7 +21,7 @@ class AttentionInteraction(tf.keras.Model):
                 )
             )
 
-    def call(self, inputs, training=False):
+    def call(self, inputs, training=None):
         attn_out = inputs  # (bs, dim_input, dim_emb)
         for mha_layer, layer_norm in self.layers:
             attn_out = mha_layer(attn_out, attn_out, training=training) + attn_out
@@ -80,7 +80,7 @@ class AutoInt(tf.keras.Model):
         elif aggregation_mode == "concat":
             self.projection_head = tf.keras.layers.Dense(1, name="projection_head")
 
-    def call(self, inputs, training=False):
+    def call(self, inputs, training=None):
         embeddings = self.embedding(inputs, training=training)  # (bs, dim_input, dim_emb)
 
         attn_out = self.interaction_attention(embeddings, training=training)

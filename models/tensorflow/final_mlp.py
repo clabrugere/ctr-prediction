@@ -121,7 +121,7 @@ class FinalMLP(tf.keras.Model):
         # final aggregation layer
         self.aggregation = Aggregation(dim_latent_1=dim_hidden_1, dim_latent_2=dim_hidden_2, num_heads=num_heads)
 
-    def call(self, inputs, training=False):
+    def call(self, inputs, training=None):
         embeddings = self.embedding(inputs, training=training)  # (bs, num_emb, dim_emb)
 
         # (bs, num_emb * dim_emb)

@@ -40,7 +40,7 @@ class DeepWide(tf.keras.Model):
         # final layer
         self.projection_head = tf.keras.layers.Dense(1, name="projection_head")
 
-    def call(self, inputs, training=False):
+    def call(self, inputs, training=None):
         embeddings = self.embedding(inputs, training=training)  # (bs, dim_input, dim_emb)
         embeddings = tf.reshape(embeddings, (-1, self.dim_input * self.dim_emb))  # (bs, dim_input * dim_emb)
 

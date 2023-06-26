@@ -21,7 +21,5 @@ class MLP(tf.keras.Model):
         else:
             self.blocks.add(tf.keras.layers.Dense(dim_hidden))
 
-    def call(self, inputs, training=False):
-        out = self.blocks(inputs, training=training)
-
-        return out
+    def call(self, inputs, training=None):
+        return self.blocks(inputs, training=training)
