@@ -30,7 +30,7 @@ class DCN(nn.Module):
 
         if cross_type not in __CROSS_VARIANTS:
             raise ValueError(f"'cross_layer' argument must be one of {__CROSS_VARIANTS}")
-        
+
         if aggregation_mode not in __AGGREGATION_MODES:
             raise ValueError(f"'aggregation_mode' must be one of {__AGGREGATION_MODES}")
 
@@ -105,6 +105,7 @@ class CrossLayerV2(nn.Module):
         dim_low,
         num_expert=1,
         num_layers=1,
+        dropout=0.0,
     ):
         super().__init__()
 
@@ -120,7 +121,7 @@ class CrossLayerV2(nn.Module):
                 experts.append((V, C, U, b))
 
             gate = nn.Parameter(torch.ones(num_expert))
-            self.layers.append((experts, gate))
+            self.layers.append((experts, gate, nn.Dropout(dropout)))
 
         self._reset_parameters()
 
@@ -142,7 +143,7 @@ class CrossLayerV2(nn.Module):
         x_0 = inputs
         x_l = inputs
 
-        for experts, gate in self.layers:
+        for experts, gate, dropout in self.layers:
             expert_outputs = []
             for V, C, U, b in experts:
                 low_rank_proj = F.relu(x_l @ V)  # (bs, d_low)
@@ -155,6 +156,7 @@ class CrossLayerV2(nn.Module):
             gate_score = F.softmax(gate)  # (num_experts)
             expert_outputs = torch.stack(expert_outputs, dim=-1)  # (bs, d, num_experts)
             outputs = expert_outputs @ gate_score + x_l  # (bs, d)
+            outputs = dropout(outputs)  # (bs, d)
 
             x_l = outputs
 
