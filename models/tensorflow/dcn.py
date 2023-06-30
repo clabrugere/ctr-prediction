@@ -106,8 +106,7 @@ class CrossLayer(tf.keras.layers.Layer):
             dtype=self.dtype,
             trainable=True,
         )
-
-        super().build(input_shape)
+        self.built = True
 
     def call(self, x_0, x_l):
         return x_0 * (tf.matmul(x_l, self.W) + self.b) + x_l
@@ -174,7 +173,6 @@ class CrossLayerV2(tf.keras.layers.Layer):
             use_bias=False,
             kernel_initializer=tf.keras.initializers.Ones(),
         )
-
         self.built = True
 
     def call(self, x_0, x_l, training=None):
