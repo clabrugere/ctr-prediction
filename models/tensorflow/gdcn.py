@@ -2,7 +2,7 @@ import tensorflow as tf
 from models.tensorflow.mlp import MLP
 
 
-class GDCN(tf.keras.Model):
+class GDCNS(tf.keras.Model):
     def __init__(
         self,
         dim_input,
@@ -35,6 +35,50 @@ class GDCN(tf.keras.Model):
         out = self.embedding(inputs, training=training)
         out = tf.reshape(out, (-1, self.dim_input * self.dim_embedding))
         out = self.cross(out, training=training)
+        out = self.projector(out, training=training)
+        out = tf.sigmoid(out)
+
+        return out
+
+
+class GDCNP(tf.keras.Model):
+    def __init__(
+        self,
+        dim_input,
+        num_embedding,
+        dim_embedding,
+        num_cross,
+        num_hidden,
+        dim_hidden,
+        embedding_l2=0.0,
+        dropout=0.0,
+        name="GDCN",
+    ):
+        super().__init__(name=name)
+        self.dim_input = dim_input
+        self.dim_embedding = dim_embedding
+
+        self.embedding = tf.keras.layers.Embedding(
+            input_dim=num_embedding,
+            output_dim=dim_embedding,
+            input_length=dim_input,
+            embeddings_regularizer=tf.keras.regularizers.l2(embedding_l2),
+            name="embedding",
+        )
+
+        self.cross = GatedCrossNetwork(num_cross)
+        self.mlp = MLP(num_hidden, dim_hidden, dropout=dropout)
+        self.projector = tf.keras.layers.Dense(1)
+        self.build(input_shape=(None, dim_input))
+
+    def call(self, inputs, training=None):
+        out = self.embedding(inputs, training=training)
+        out = tf.reshape(out, (-1, self.dim_input * self.dim_embedding))
+
+        out_1 = self.cross(out, training=training)
+        out_2 = self.mlp(out, training=training)
+
+        out = tf.concat((out_1, out_2), axis=-1)
         out = self.projector(out, training=training)
         out = tf.sigmoid(out)
 
