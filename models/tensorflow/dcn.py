@@ -1,11 +1,11 @@
 import tensorflow as tf
+
 from models.tensorflow.mlp import MLP
 
 
-__CROSS_VARIANTS = ["cross", "cross_mix"]
-
-
 class DCN(tf.keras.Model):
+    __CROSS_VARIANTS = ["cross", "cross_mix"]
+
     def __init__(
         self,
         dim_input,
@@ -23,8 +23,8 @@ class DCN(tf.keras.Model):
     ):
         super().__init__(name=name)
 
-        if cross_type not in __CROSS_VARIANTS:
-            raise ValueError(f"'cross_layer' argument must be one of {__CROSS_VARIANTS}")
+        if cross_type not in self.__CROSS_VARIANTS:
+            raise ValueError(f"'cross_layer' argument must be one of {self.__CROSS_VARIANTS}")
 
         self.parallel_mlp = parallel_mlp
         self.dim_input = dim_input

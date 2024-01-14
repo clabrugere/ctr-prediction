@@ -1,15 +1,15 @@
 import tensorflow as tf
+
 from models.tensorflow.mlp import MLP
-
-
-__AGGREGATION_MODES = ["add", "concat"]
 
 
 class AttentionInteraction(tf.keras.Model):
     def __init__(self, num_layer, num_heads, dim_key, dropout=0.0):
-        self.layers = []
+        super().__init__()
+
+        self._layers = []
         for i in range(num_layer):
-            self.layers.append(
+            self._layers.append(
                 (
                     tf.keras.layers.MultiHeadAttention(
                         num_heads=num_heads,
@@ -23,7 +23,7 @@ class AttentionInteraction(tf.keras.Model):
 
     def call(self, inputs, training=None):
         attn_out = inputs  # (bs, dim_input, dim_emb)
-        for mha_layer, layer_norm in self.layers:
+        for mha_layer, layer_norm in self._layers:
             attn_out = mha_layer(attn_out, attn_out, training=training) + attn_out
             attn_out = layer_norm(attn_out)  # (bs, dim_input, dim_emb)
 
@@ -31,6 +31,8 @@ class AttentionInteraction(tf.keras.Model):
 
 
 class AutoInt(tf.keras.Model):
+    __AGGREGATION_MODES = ["add", "concat"]
+
     def __init__(
         self,
         dim_input,
@@ -47,8 +49,8 @@ class AutoInt(tf.keras.Model):
     ):
         super().__init__(name=name)
 
-        if aggregation_mode not in __AGGREGATION_MODES:
-            raise ValueError(f"'aggregation_mode' must be one of {__AGGREGATION_MODES}")
+        if aggregation_mode not in self.__AGGREGATION_MODES:
+            raise ValueError(f"'aggregation_mode' must be one of {self.__AGGREGATION_MODES}")
 
         self.dim_input = dim_input
         self.dim_embedding = dim_embedding

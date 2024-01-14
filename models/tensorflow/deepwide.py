@@ -10,6 +10,7 @@ class DeepWide(tf.keras.Model):
         dim_embedding=8,
         num_hidden=3,
         dim_hidden=100,
+        embedding_l2=0.0,
         dropout=0.0,
         name="DeepWide",
     ):
@@ -23,6 +24,7 @@ class DeepWide(tf.keras.Model):
             input_dim=num_embedding,
             output_dim=dim_embedding,
             input_length=dim_input,
+            embeddings_regularizer=tf.keras.regularizers.l2(embedding_l2),
             name="embedding",
         )
 
