@@ -1,5 +1,6 @@
 data/
 .vscode
+example/
 *debug.ipynb
 .DS_Store
 
