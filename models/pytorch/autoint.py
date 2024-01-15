@@ -4,35 +4,37 @@ from torch.nn import functional as F
 
 from models.pytorch.mlp import MLP
 
-__AGGREGATION_MODES = ["add", "concat"]
-
 
 class AttentionInteraction(nn.Module):
-    def __init__(self, dim_embedding, num_layers, num_heads=1, dropout=0.0, **attn_kwargs):
-        self.layers = nn.ModuleList()
-        for _ in range(num_layers):
-            self.layers.append(
-                (
-                    nn.MultiheadAttention(
-                        embed_dim=dim_embedding,
-                        num_heads=num_heads,
-                        dropout=dropout,
-                        batch_first=True,
-                        **attn_kwargs,
-                    ),
-                    nn.LayerNorm(dim_embedding),
-                )
-            )
+    def __init__(self, dim_embedding, num_heads, dropout, **attn_kwargs):
+        super().__init__()
+        self.mha = nn.MultiheadAttention(
+            embed_dim=dim_embedding,
+            num_heads=num_heads,
+            dropout=dropout,
+            batch_first=True,
+            **attn_kwargs,
+        )
+        self.norm = nn.LayerNorm(dim_embedding)
 
     def forward(self, inputs):
-        outputs = inputs
-        for mha, layer_norm in self.layers:
-            outputs = layer_norm(mha(outputs, outputs, outputs) + outputs)  # (bs, num_embedding, dim_embedding)
+        outputs, _ = self.mha(inputs, inputs, inputs)  # (bs, num_embedding, dim_embedding)
 
-        return outputs
+        return self.norm(outputs + inputs)
+
+
+class AttentionBlock(nn.Sequential):
+    def __init__(self, num_blocks, dim_embedding, num_heads=1, dropout=0.0, **attn_kwargs):
+        blocks = []
+        for _ in range(num_blocks):
+            blocks.append(AttentionInteraction(dim_embedding, num_heads, dropout, **attn_kwargs))
+
+        super().__init__(*blocks)
 
 
 class AutoInt(nn.Module):
+    __AGGREGATION_MODES = ["add", "concat"]
+
     def __init__(
         self,
         dim_input,
@@ -47,8 +49,8 @@ class AutoInt(nn.Module):
     ):
         super().__init__()
 
-        if aggregation_mode not in __AGGREGATION_MODES:
-            raise ValueError(f"'aggregation_mode' must be one of {__AGGREGATION_MODES}")
+        if aggregation_mode not in self.__AGGREGATION_MODES:
+            raise ValueError(f"'aggregation_mode' must be one of {self.__AGGREGATION_MODES}")
 
         self.dim_input = dim_input
         self.dim_embedding = dim_embedding
@@ -64,9 +66,9 @@ class AutoInt(nn.Module):
             dropout=dropout,
         )
 
-        self.interaction_attn = AttentionInteraction(
+        self.interaction_attn = AttentionBlock(
+            num_blocks=num_attention,
             dim_embedding=dim_embedding,
-            num_layers=num_attention,
             num_heads=num_heads,
             dropout=dropout,
         )

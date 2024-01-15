@@ -1,7 +1,7 @@
 import pytest
-import tensorflow as tf
+import torch
 
-from models.tensorflow import DCN, GDCNP, GDCNS, MLP, AutoInt, DeepWide, FinalMLP
+from models.pytorch import DCN, MLP, AutoInt, DeepWide, FinalMLP
 
 SIZE = 320
 NUM_FEATURES = 10
@@ -10,19 +10,21 @@ NUM_EMBEDDING = 100
 
 @pytest.fixture(scope="module")
 def sample_categorical_input():
-    return tf.random.categorical(
-        tf.random.uniform((SIZE, NUM_EMBEDDING), minval=0, maxval=1), NUM_FEATURES, dtype=tf.int32
+    return torch.multinomial(
+        torch.rand((SIZE, NUM_EMBEDDING)),
+        NUM_FEATURES,
+        replacement=True,
     )
 
 
 @pytest.fixture(scope="module")
 def sample_continuous_input():
-    return tf.random.uniform(shape=(SIZE, NUM_FEATURES), dtype=tf.float32)
+    return torch.rand(SIZE, NUM_FEATURES, dtype=torch.float32)
 
 
 @pytest.fixture
 def mlp_model() -> MLP:
-    return MLP(num_hidden=3, dim_hidden=16, dim_out=1)
+    return MLP(dim_in=NUM_FEATURES, num_hidden=3, dim_hidden=16, dim_out=1)
 
 
 @pytest.fixture
@@ -51,7 +53,6 @@ def autoint_model() -> AutoInt:
         num_embedding=NUM_EMBEDDING,
         dim_embedding=8,
         num_attention=2,
-        dim_key=8,
         num_heads=2,
         num_hidden=3,
         dim_hidden=16,
@@ -70,18 +71,4 @@ def final_mlp_model() -> FinalMLP:
         num_hidden_2=3,
         dim_hidden_2=16,
         num_heads=2,
-    )
-
-
-@pytest.fixture
-def gdcnp_model() -> GDCNP:
-    return GDCNP(
-        dim_input=NUM_FEATURES, num_embedding=NUM_EMBEDDING, dim_embedding=8, num_cross=2, num_hidden=3, dim_hidden=16
-    )
-
-
-@pytest.fixture
-def gdcns_model() -> GDCNS:
-    return GDCNS(
-        dim_input=NUM_FEATURES, num_embedding=NUM_EMBEDDING, dim_embedding=8, num_cross=2, num_hidden=3, dim_hidden=16
     )

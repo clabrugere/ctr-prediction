@@ -1,4 +1,6 @@
+import logging
 import math
+
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -6,11 +8,10 @@ from torch.nn import functional as F
 from models.pytorch.mlp import MLP
 
 
-__CROSS_VARIANTS = ["cross", "cross_mix"]
-__AGGREGATION_MODES = ["add", "concat"]
-
-
 class DCN(nn.Module):
+    __CROSS_VARIANTS = ["cross", "cross_mix"]
+    __AGGREGATION_MODES = ["add", "concat"]
+
     def __init__(
         self,
         dim_input,
@@ -28,11 +29,11 @@ class DCN(nn.Module):
     ):
         super().__init__()
 
-        if cross_type not in __CROSS_VARIANTS:
-            raise ValueError(f"'cross_layer' argument must be one of {__CROSS_VARIANTS}")
+        if cross_type not in self.__CROSS_VARIANTS:
+            raise ValueError(f"'cross_layer' argument must be one of {self.__CROSS_VARIANTS}")
 
-        if aggregation_mode not in __AGGREGATION_MODES:
-            raise ValueError(f"'aggregation_mode' must be one of {__AGGREGATION_MODES}")
+        if aggregation_mode not in self.__AGGREGATION_MODES:
+            raise ValueError(f"'aggregation_mode' must be one of {self.__AGGREGATION_MODES}")
 
         self.parallel_mlp = parallel_mlp
         self.aggregation_mode = aggregation_mode
@@ -50,10 +51,15 @@ class DCN(nn.Module):
         )
 
         if cross_type == "cross":
-            self.cross_layers = CrossLayer(dim_in=dim_input, num_layers=num_interaction)
+            self.cross_layers = CrossLayer(dim_input=dim_input * dim_embedding, num_layers=num_interaction)
         if cross_type == "cross_mix":
-            self.cross_layers = CrossLayerV2(
-                dim_in=dim_input, dim_low=dim_low, num_expert=num_expert, num_layers=num_interaction
+            self.cross_layers = nn.Sequential(
+                *[
+                    CrossMixBlock(
+                        dim_input=dim_input * dim_embedding, dim_low=dim_low, num_expert=num_expert, dropout=dropout
+                    )
+                    for _ in range(num_interaction)
+                ]
             )
 
         if aggregation_mode == "add":
@@ -70,25 +76,25 @@ class DCN(nn.Module):
         if self.parallel_mlp:
             mlp_out = self.interaction_mlp(embeddings)  # (bs, dim_hidden) or (bs, 1)
             if self.aggregation_mode == "add":
-                attn_out = self.projection_head(cross_out)  # (bs, 1)
-                logits = attn_out + mlp_out  # (bs, 1)
+                cross_out = self.projection_head(cross_out)  # (bs, 1)
+                logits = cross_out + mlp_out  # (bs, 1)
             elif self.aggregation_mode == "concat":
                 latent = torch.concat((cross_out, mlp_out), dim=-1)  # (bs, dim_input * dim_emb + dim_hidden)
                 logits = self.projection_head(latent)  # (bs, 1)
         else:
             cross_out = F.relu(mlp_out)  # (bs, dim_input * dim_embedding)
             latent = self.interaction_mlp(cross_out)  # (bs, dim_hidden)
+            logits = self.projection_head(latent)  # (bs, 1)
 
-        logits = self.projection_head(latent)  # (bs, 1)
         outputs = F.sigmoid(logits)  # (bs, 1)
 
         return outputs
 
 
 class CrossLayer(nn.Module):
-    def __init__(self, dim_in, num_layers=1):
+    def __init__(self, dim_input, num_layers=1):
         super().__init__()
-        self.layers = nn.ModuleList([nn.Linear(dim_in, dim_in) for _ in range(num_layers)])
+        self.layers = nn.ModuleList([nn.Linear(dim_input, dim_input) for _ in range(num_layers)])
 
     def forward(self, inputs):
         outputs = inputs
@@ -98,66 +104,58 @@ class CrossLayer(nn.Module):
         return outputs
 
 
-class CrossLayerV2(nn.Module):
+class CrossMixLayer(nn.Module):
+    def __init__(self, dim_input, dim_low):
+        super().__init__()
+
+        self.V = nn.Parameter(torch.empty((dim_input, dim_low)))
+        self.C = nn.Parameter(torch.empty((dim_low, dim_low)))
+        self.U = nn.Parameter(torch.empty((dim_low, dim_input)))
+        self.b = nn.Parameter(torch.empty(dim_input))
+        self._reset_parameters()
+
+    def _reset_parameters(self):
+        nn.init.kaiming_uniform_(self.V, nonlinearity="relu")
+        nn.init.kaiming_uniform_(self.C, nonlinearity="relu")
+        nn.init.kaiming_uniform_(self.U, nonlinearity="relu")
+
+        # bias
+        fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.U)
+        bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+        nn.init.uniform_(self.b, -bound, bound)
+
+    def forward(self, inputs):
+        # x : (bs, d)
+        outputs = F.relu(inputs @ self.V)  # (bs, d_low)
+        outputs = F.relu(outputs @ self.C)  # (bs, d_low)
+        outputs = outputs @ self.U  # (bs, d)
+        outputs = inputs * outputs + self.b  # (bs, d)
+
+        return outputs
+
+
+class CrossMixBlock(nn.Module):
     def __init__(
         self,
         dim_input,
         dim_low,
         num_expert=1,
-        num_layers=1,
         dropout=0.0,
     ):
         super().__init__()
 
-        self.layers = nn.ModuleList()
-        for _ in range(num_layers):
-            experts = nn.ModuleList()
-            for _ in range(num_expert):
-                V = nn.Parameter(torch.empty((dim_input, dim_low)))
-                C = nn.Parameter(torch.empty((dim_low, dim_low)))
-                U = nn.Parameter(torch.empty((dim_low, dim_input)))
-                b = nn.Parameter(torch.empty(dim_input))
-
-                experts.append((V, C, U, b))
-
-            gate = nn.Parameter(torch.ones(num_expert))
-            self.layers.append((experts, gate, nn.Dropout(dropout)))
-
-        self._reset_parameters()
-
-    def _reset_parameters(self):
-        for experts, _ in self.layers:
-            for V, C, U, b in experts:
-                nn.init.kaiming_uniform_(V, nonlinearity="relu")
-                nn.init.kaiming_uniform_(C, nonlinearity="relu")
-                nn.init.kaiming_uniform_(U, nonlinearity="relu")
-
-                # bias
-                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(U)
-                bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-                nn.init.uniform_(b, -bound, bound)
+        self.experts = nn.ModuleList([CrossMixLayer(dim_input, dim_low) for _ in range(num_expert)])
+        self.gate = nn.Linear(dim_input, num_expert)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, inputs):
         # x : (bs, d)
-        # projects input to a lower dimensional space then back with non-linearity in the middle
-        x_0 = inputs
-        x_l = inputs
+        expert_outputs = []
+        for expert in self.experts:
+            expert_outputs.append(expert(inputs))
 
-        for experts, gate, dropout in self.layers:
-            expert_outputs = []
-            for V, C, U, b in experts:
-                low_rank_proj = F.relu(x_l @ V)  # (bs, d_low)
-                low_rank_inter = F.relu(low_rank_proj @ C)  # (bs, d_low)
-                expert_output = x_0 * low_rank_inter @ U + b  # (bs, d)
-
-                expert_outputs.append(expert_output)
-
-            # aggregate expert representations and add residual connection
-            gate_score = F.softmax(gate)  # (num_experts)
-            expert_outputs = torch.stack(expert_outputs, dim=-1)  # (bs, d, num_experts)
-            outputs = expert_outputs @ gate_score + x_l  # (bs, d)
-            outputs = dropout(outputs)  # (bs, d)
-
-            x_l = outputs
+        expert_outputs = torch.stack(expert_outputs, dim=-1)  # (bs, d, num_experts)
+        gate_score = F.softmax(self.gate(inputs), dim=-1).unsqueeze(2)  # (bs, num_experts)
+        outputs = self.dropout(torch.bmm(expert_outputs, gate_score).squeeze(2) + inputs)  # (bs, d)
 
         return outputs

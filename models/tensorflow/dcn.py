@@ -43,7 +43,7 @@ class DCN(tf.keras.Model):
         if cross_type == "cross_mix":
             for _ in range(num_interaction):
                 self.interaction_cross.append(
-                    (CrossLayerV2(dim_low=dim_low, num_expert=num_expert), tf.keras.layers.Dropout(dropout))
+                    (CrossMixLayer(dim_low=dim_low, num_expert=num_expert), tf.keras.layers.Dropout(dropout))
                 )
         else:
             for _ in range(num_interaction):
@@ -112,7 +112,7 @@ class CrossLayer(tf.keras.layers.Layer):
         return x_0 * (tf.matmul(x_l, self.W) + self.b) + x_l
 
 
-class CrossLayerV2(tf.keras.layers.Layer):
+class CrossMixLayer(tf.keras.layers.Layer):
     def __init__(
         self,
         dim_low,
