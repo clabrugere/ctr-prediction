@@ -72,3 +72,13 @@ def final_mlp_model() -> FinalMLP:
         dim_hidden_2=16,
         num_heads=2,
     )
+
+
+@pytest.fixture
+def model(request):
+    return request.getfixturevalue(request.param)
+
+
+@pytest.fixture
+def input(request):
+    return request.getfixturevalue(request.param)

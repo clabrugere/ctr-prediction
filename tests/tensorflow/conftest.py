@@ -85,3 +85,13 @@ def gdcns_model() -> GDCNS:
     return GDCNS(
         dim_input=NUM_FEATURES, num_embedding=NUM_EMBEDDING, dim_embedding=8, num_cross=2, num_hidden=3, dim_hidden=16
     )
+
+
+@pytest.fixture
+def model(request):
+    return request.getfixturevalue(request.param)
+
+
+@pytest.fixture
+def input(request):
+    return request.getfixturevalue(request.param)

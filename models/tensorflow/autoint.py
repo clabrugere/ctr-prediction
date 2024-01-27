@@ -4,30 +4,23 @@ from models.tensorflow.mlp import MLP
 
 
 class AttentionInteraction(tf.keras.Model):
-    def __init__(self, num_layer, num_heads, dim_key, dropout=0.0):
-        super().__init__()
-
-        self._layers = []
-        for i in range(num_layer):
-            self._layers.append(
-                (
-                    tf.keras.layers.MultiHeadAttention(
-                        num_heads=num_heads,
-                        key_dim=dim_key,
-                        dropout=dropout,
-                        name=f"interaction_layer_{i+1}",
-                    ),
-                    tf.keras.layers.LayerNormalization(),
-                )
-            )
+    def __init__(self, num_heads, dim_key, dropout=0.0, name="AttentionInteraction"):
+        super().__init__(name=name)
+        self.mha = tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=dim_key, dropout=dropout)
+        self.norm = tf.keras.layers.LayerNormalization()
 
     def call(self, inputs, training=None):
-        attn_out = inputs  # (bs, dim_input, dim_emb)
-        for mha_layer, layer_norm in self._layers:
-            attn_out = mha_layer(attn_out, attn_out, training=training) + attn_out
-            attn_out = layer_norm(attn_out)  # (bs, dim_input, dim_emb)
+        return self.norm(self.mha(inputs, inputs, training=training) + inputs)
 
-        return attn_out
+
+class AttentionInteractionBlock(tf.keras.Sequential):
+    def __init__(self, num_layer, num_heads, dim_key, dropout=0.0):
+        super().__init__(
+            [
+                AttentionInteraction(num_heads, dim_key, dropout=dropout, name=f"attn_interation_{i}")
+                for i in range(num_layer)
+            ]
+        )
 
 
 class AutoInt(tf.keras.Model):
@@ -73,8 +66,8 @@ class AutoInt(tf.keras.Model):
         )
 
         # interaction layer using stacked self-attention
-        self.interaction_attention = AttentionInteraction(
-            num_attention, num_heads=num_heads, dim_key=dim_key, dropout=dropout
+        self.interaction_attention = AttentionInteractionBlock(
+            num_layer=num_attention, num_heads=num_heads, dim_key=dim_key, dropout=dropout
         )
 
         if aggregation_mode == "add":
