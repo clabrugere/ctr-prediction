@@ -116,9 +116,9 @@ class CrossMixLayer(tf.keras.layers.Layer):
     def __init__(
         self,
         dim_low,
-        num_expert=1,
+        num_expert,
         activation="relu",
-        weights_initializer="glorot_uniform",
+        weights_initializer="he_uniform",
         bias_initializer="zeros",
         gate_function="softmax",
     ):
@@ -133,66 +133,47 @@ class CrossMixLayer(tf.keras.layers.Layer):
 
     def build(self, input_shape):
         input_shape = tf.TensorShape(input_shape)
-        dim_input = tf.compat.dimension_value(input_shape[-1])
-        self.experts = []
+        self.dim_input = tf.compat.dimension_value(input_shape[-1])
 
-        for i in range(self.num_experts):
-            U = self.add_weight(
-                name=f"U_{i}",
-                shape=(dim_input, self.dim_low),
-                initializer=self.weights_initializer,
-                dtype=self.dtype,
-                trainable=True,
-            )
-            V = self.add_weight(
-                name=f"V_{i}",
-                shape=(dim_input, self.dim_low),
-                initializer=self.weights_initializer,
-                dtype=self.dtype,
-                trainable=True,
-            )
-            C = self.add_weight(
-                name=f"C_{i}",
-                shape=(self.dim_low, self.dim_low),
-                initializer=self.weights_initializer,
-                dtype=self.dtype,
-                trainable=True,
-            )
-            bias = self.add_weight(
-                name=f"bias_{i}",
-                shape=(dim_input,),
-                initializer=self.bias_initializer,
-                dtype=self.dtype,
-                trainable=True,
-            )
-            self.experts.append((U, V, C, bias))
-
-        self.gate = tf.keras.layers.Dense(
-            self.num_experts,
-            activation=self.gate_function,
-            use_bias=False,
-            kernel_initializer=tf.keras.initializers.Ones(),
+        self.U = self.add_weight(
+            name="U",
+            shape=(self.dim_low * self.num_experts, self.dim_input * self.num_experts),
+            initializer=self.weights_initializer,
+            dtype=self.dtype,
+            trainable=True,
         )
+        self.V = self.add_weight(
+            name="V",
+            shape=(self.dim_input, self.dim_low * self.num_experts),
+            initializer=self.weights_initializer,
+            dtype=self.dtype,
+            trainable=True,
+        )
+        self.C = self.add_weight(
+            name="C",
+            shape=(self.dim_low * self.num_experts, self.dim_low * self.num_experts),
+            initializer=self.weights_initializer,
+            dtype=self.dtype,
+            trainable=True,
+        )
+        self.b = self.add_weight(
+            name="bias",
+            shape=(self.dim_input * self.num_experts,),
+            initializer=self.bias_initializer,
+            dtype=self.dtype,
+            trainable=True,
+        )
+
+        self.gate = tf.keras.layers.Dense(self.num_experts, activation=self.gate_function, use_bias=False)
         self.built = True
 
     def call(self, x_0, x_l, training=None):
-        # x_0 and x_l are of shape (batch_size, dim_input * dim_embedding = dim_last)
-        expert_outputs = []
-        for U, V, C, bias in self.experts:
-            # project input in a low dimensional space and pass through non linearity
-            low_rank_proj = self.activation(tf.matmul(x_l, V))  # (bs, dim_low)
+        out = self.activation(tf.matmul(x_l, self.V))  # (bs, dim_low * num_experts)
+        out = self.activation(tf.matmul(out, self.C))  # (bs, dim_low * num_experts)
+        out = tf.matmul(out, self.U) + self.b  # (bs, dim * num_experts)
+        out = tf.reshape(out, (-1, self.dim_input, self.num_experts))  # (bs, dim, num_experts)
+        out = tf.expand_dims(x_0, -1) * out  # (bs, dim, num_experts)
 
-            # project into an intermediate space with same dimension
-            low_rank_inter = self.activation(tf.matmul(low_rank_proj, C))  # (bs, dim_low)
-
-            # project back to initial space
-            expert_output = x_0 * tf.matmul(low_rank_inter, U, transpose_b=True) + bias  # (bs, dim_last)
-
-            expert_outputs.append(expert_output)
-
-        # aggregate expert representations using gate score and add residual connection
         gate_score = self.gate(x_0, training=training)  # (bs, num_experts)
-        expert_outputs = tf.stack(expert_outputs, axis=-1)
-        outputs = tf.einsum("bie,be->bi", expert_outputs, gate_score) + x_l
 
-        return outputs
+        return tf.einsum("bde,be->bd", out, gate_score) + x_l  # (bs, dim)
