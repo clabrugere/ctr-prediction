@@ -35,22 +35,33 @@ class FeatureSelection(tf.keras.Model):
         return out_1, out_2  # (bs, dim_feature), (bs, dim_feature)
 
 
-class Aggregation(tf.keras.Model):
-    def __init__(self, dim_latent_1, dim_latent_2, num_heads=1):
+class Aggregation(tf.keras.layers.Layer):
+    def __init__(self, num_heads=1):
         super().__init__()
-
         self.num_heads = num_heads
-        self.dim_head_1 = dim_latent_1 // num_heads
-        self.dim_head_2 = dim_latent_2 // num_heads
 
-        self.w_1 = self.add_weight(shape=(self.dim_head_1, num_heads, 1), initializer="glorot_uniform", trainable=True)
-        self.w_2 = self.add_weight(shape=(self.dim_head_2, num_heads, 1), initializer="glorot_uniform", trainable=True)
-        self.w_12 = self.add_weight(
-            shape=(num_heads, self.dim_head_1, self.dim_head_2, 1), initializer="glorot_uniform", trainable=True
+    def build(self, input_shapes):
+        input_shape_1, input_shape_2 = input_shapes
+        dim_latent_1 = tf.compat.dimension_value(tf.TensorShape(input_shape_1)[-1])
+        dim_latent_2 = tf.compat.dimension_value(tf.TensorShape(input_shape_2)[-1])
+
+        self.dim_head_1 = dim_latent_1 // self.num_heads
+        self.dim_head_2 = dim_latent_2 // self.num_heads
+
+        self.w_1 = self.add_weight(
+            shape=(self.dim_head_1, self.num_heads, 1), initializer="glorot_uniform", trainable=True
         )
-        self.bias = self.add_weight(shape=(1, num_heads, 1), initializer="zeros", trainable=True)
+        self.w_2 = self.add_weight(
+            shape=(self.dim_head_2, self.num_heads, 1), initializer="glorot_uniform", trainable=True
+        )
+        self.w_12 = self.add_weight(
+            shape=(self.num_heads, self.dim_head_1, self.dim_head_2, 1), initializer="glorot_uniform", trainable=True
+        )
+        self.bias = self.add_weight(shape=(1, self.num_heads, 1), initializer="zeros", trainable=True)
+        self.built = True
 
-    def call(self, latent_1, latent_2):
+    def call(self, latents):
+        latent_1, latent_2 = latents
         # bilinear aggregation of the two latent representations
         # y = b + w_1.T o_1 + w_2.T o_2 + o_1.T W_3 o_2
         latent_1 = tf.reshape(latent_1, (-1, self.num_heads, self.dim_head_1))  # (bs, num_heads, dim_head_1)
@@ -116,7 +127,7 @@ class FinalMLP(tf.keras.Model):
         )
 
         # final aggregation layer
-        self.aggregation = Aggregation(dim_latent_1=dim_hidden_1, dim_latent_2=dim_hidden_2, num_heads=num_heads)
+        self.aggregation = Aggregation(num_heads=num_heads)
 
     def call(self, inputs, training=None):
         embeddings = self.embedding(inputs, training=training)  # (bs, num_emb, dim_emb)
@@ -133,7 +144,7 @@ class FinalMLP(tf.keras.Model):
         latent_2 = self.interaction_2(emb_2, training=training)
 
         # merge the representations using an aggregation scheme
-        logits = self.aggregation(latent_1, latent_2)  # (bs, 1)
+        logits = self.aggregation([latent_1, latent_2])  # (bs, 1)
         outputs = tf.nn.sigmoid(logits)  # (bs, 1)
 
         return outputs
