@@ -42,34 +42,43 @@ class Aggregation(tf.keras.layers.Layer):
 
     def build(self, input_shapes):
         input_shape_1, input_shape_2 = input_shapes
-        dim_latent_1 = tf.compat.dimension_value(tf.TensorShape(input_shape_1)[-1])
-        dim_latent_2 = tf.compat.dimension_value(tf.TensorShape(input_shape_2)[-1])
+        dim_inputs_1 = tf.compat.dimension_value(tf.TensorShape(input_shape_1)[-1])
+        dim_inputs_2 = tf.compat.dimension_value(tf.TensorShape(input_shape_2)[-1])
 
-        self.dim_head_1 = dim_latent_1 // self.num_heads
-        self.dim_head_2 = dim_latent_2 // self.num_heads
+        self.dim_head_1 = dim_inputs_1 // self.num_heads
+        self.dim_head_2 = dim_inputs_2 // self.num_heads
 
         self.w_1 = self.add_weight(
-            shape=(self.dim_head_1, self.num_heads, 1), initializer="glorot_uniform", trainable=True
+            name="w_1",
+            shape=(self.dim_head_1, self.num_heads, 1),
+            initializer="glorot_uniform",
+            trainable=True,
         )
         self.w_2 = self.add_weight(
-            shape=(self.dim_head_2, self.num_heads, 1), initializer="glorot_uniform", trainable=True
+            name="w_2",
+            shape=(self.dim_head_2, self.num_heads, 1),
+            initializer="glorot_uniform",
+            trainable=True,
         )
         self.w_12 = self.add_weight(
-            shape=(self.num_heads, self.dim_head_1, self.dim_head_2, 1), initializer="glorot_uniform", trainable=True
+            name="w_12",
+            shape=(self.num_heads, self.dim_head_1, self.dim_head_2, 1),
+            initializer="glorot_uniform",
+            trainable=True,
         )
         self.bias = self.add_weight(shape=(1, self.num_heads, 1), initializer="zeros", trainable=True)
         self.built = True
 
-    def call(self, latents):
-        latent_1, latent_2 = latents
+    def call(self, inputs):
         # bilinear aggregation of the two latent representations
         # y = b + w_1.T o_1 + w_2.T o_2 + o_1.T W_3 o_2
-        latent_1 = tf.reshape(latent_1, (-1, self.num_heads, self.dim_head_1))  # (bs, num_heads, dim_head_1)
-        latent_2 = tf.reshape(latent_2, (-1, self.num_heads, self.dim_head_2))  # (bs, num_heads, dim_head_2)
+        inputs_1, inputs_2 = inputs
+        inputs_1 = tf.reshape(inputs_1, (-1, self.num_heads, self.dim_head_1))  # (bs, num_heads, dim_head_1)
+        inputs_2 = tf.reshape(inputs_2, (-1, self.num_heads, self.dim_head_2))  # (bs, num_heads, dim_head_2)
 
-        first_order = tf.einsum("bhi,iho->bho", latent_1, self.w_1)  # (bs, num_heads, 1)
-        first_order += tf.einsum("bhi,iho->bho", latent_2, self.w_2)  # (bs, num_heads, 1)
-        second_order = tf.einsum("bhi,hijo,bhj->bho", latent_1, self.w_12, latent_2)  # (bs, num_heads, 1)
+        first_order = tf.einsum("bhi,iho->bho", inputs_1, self.w_1)  # (bs, num_heads, 1)
+        first_order += tf.einsum("bhi,iho->bho", inputs_2, self.w_2)  # (bs, num_heads, 1)
+        second_order = tf.einsum("bhi,hijo,bhj->bho", inputs_1, self.w_12, inputs_2)  # (bs, num_heads, 1)
 
         out = tf.reduce_sum(first_order + second_order + self.bias, axis=1)  # (bs, 1)
 
@@ -131,7 +140,6 @@ class FinalMLP(tf.keras.Model):
 
     def call(self, inputs, training=None):
         embeddings = self.embedding(inputs, training=training)  # (bs, num_emb, dim_emb)
-
         embeddings = tf.reshape(embeddings, (-1, self.dim_input * self.dim_embedding))  # (bs, num_emb * dim_emb)
 
         # weight features of the two streams using a gating mechanism
