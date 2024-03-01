@@ -38,15 +38,12 @@ class FeatureSelection(nn.Module):
 
 
 class Aggregation(nn.Module):
-    def __init__(self, dim_in_1, dim_in_2, dim_latent_1, dim_latent_2, num_heads=1):
+    def __init__(self, dim_inputs_1, dim_inputs_2, num_heads=1):
         super().__init__()
 
         self.num_heads = num_heads
-        self.dim_head_1 = dim_latent_1 // num_heads
-        self.dim_head_2 = dim_latent_2 // num_heads
-
-        self.w_1 = nn.Linear(dim_in_1, 1)
-        self.w_2 = nn.Linear(dim_in_2, 1)
+        self.dim_head_1 = dim_inputs_1 // num_heads
+        self.dim_head_2 = dim_inputs_2 // num_heads
 
         self.w_1 = nn.Parameter(torch.empty(self.dim_head_1, num_heads, 1))
         self.w_2 = nn.Parameter(torch.empty(self.dim_head_2, num_heads, 1))
@@ -60,15 +57,15 @@ class Aggregation(nn.Module):
         nn.init.xavier_uniform_(self.w_2)
         nn.init.xavier_uniform_(self.w_12)
 
-    def forward(self, latent_1, latent_2):
+    def forward(self, inputs_1, inputs_2):
         # bilinear aggregation of the two latent representations
         # y = b + w_1.T o_1 + w_2.T o_2 + o_1.T W_3 o_2
-        latent_1 = torch.reshape(latent_1, (-1, self.num_heads, self.dim_head_1))  # (bs, num_heads, dim_head_1)
-        latent_2 = torch.reshape(latent_2, (-1, self.num_heads, self.dim_head_2))  # (bs, num_heads, dim_head_2)
+        inputs_1 = torch.reshape(inputs_1, (-1, self.num_heads, self.dim_head_1))  # (bs, num_heads, dim_head_1)
+        inputs_2 = torch.reshape(inputs_2, (-1, self.num_heads, self.dim_head_2))  # (bs, num_heads, dim_head_2)
 
-        first_order = torch.einsum("bhi,iho->bho", latent_1, self.w_1)  # (bs, num_heads, 1)
-        first_order += torch.einsum("bhi,iho->bho", latent_2, self.w_2)  # (bs, num_heads, 1)
-        second_order = torch.einsum("bhi,hijo,bhj->bho", latent_1, self.w_12, latent_2)  # (bs, num_heads, 1)
+        first_order = torch.einsum("bhi,iho->bho", inputs_1, self.w_1)  # (bs, num_heads, 1)
+        first_order += torch.einsum("bhi,iho->bho", inputs_2, self.w_2)  # (bs, num_heads, 1)
+        second_order = torch.einsum("bhi,hijo,bhj->bho", inputs_1, self.w_12, inputs_2)  # (bs, num_heads, 1)
 
         out = torch.sum(first_order + second_order + self.bias, dim=1)  # (bs, 1)
 
@@ -121,10 +118,8 @@ class FinalMLP(nn.Module):
 
         # final aggregation layer
         self.aggregation = Aggregation(
-            dim_in_1=dim_hidden_1,
-            dim_in_2=dim_hidden_2,
-            dim_latent_1=dim_hidden_1,
-            dim_latent_2=dim_hidden_2,
+            dim_inputs_1=dim_hidden_1,
+            dim_inputs_2=dim_hidden_2,
             num_heads=num_heads,
         )
 
