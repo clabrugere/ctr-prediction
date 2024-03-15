@@ -1,23 +1,22 @@
-import tensorflow as tf
+from keras import Sequential
+from keras.layers import BatchNormalization, Dense, Dropout, ReLU
 
 
-class MLP(tf.keras.Sequential):
+class MLP(Sequential):
     def __init__(self, num_hidden, dim_hidden, dim_out=None, batch_norm=True, dropout=0.0, name="MLP"):
         layers = []
         for _ in range(num_hidden - 1):
-            layers.append(tf.keras.layers.Dense(dim_hidden))
+            layers.append(Dense(dim_hidden))
 
             if batch_norm:
-                layers.append(tf.keras.layers.BatchNormalization())
+                layers.append(BatchNormalization())
 
-            layers.append(tf.keras.layers.ReLU())
-
-            if dropout > 0.0:
-                layers.append(tf.keras.layers.Dropout(dropout))
+            layers.append(ReLU())
+            layers.append(Dropout(dropout))
 
         if dim_out:
-            layers.append(tf.keras.layers.Dense(dim_out))
+            layers.append(Dense(dim_out))
         else:
-            layers.append(tf.keras.layers.Dense(dim_hidden))
+            layers.append(Dense(dim_hidden))
 
         super().__init__(layers, name=name)

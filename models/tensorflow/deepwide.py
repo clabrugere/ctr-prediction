@@ -1,16 +1,18 @@
 import tensorflow as tf
+from keras import Model, activations
+from keras.layers import Dense, Embedding
+
 from models.tensorflow.mlp import MLP
 
 
-class DeepWide(tf.keras.Model):
+class DeepWide(Model):
     def __init__(
         self,
         dim_input,
         num_embedding,
-        dim_embedding=8,
-        num_hidden=3,
-        dim_hidden=100,
-        embedding_l2=0.0,
+        dim_embedding,
+        num_hidden,
+        dim_hidden,
         dropout=0.0,
         name="DeepWide",
     ):
@@ -20,19 +22,16 @@ class DeepWide(tf.keras.Model):
         self.dim_emb = dim_embedding
 
         # embedding layer
-        self.embedding = tf.keras.layers.Embedding(
+        self.embedding = Embedding(
             input_dim=num_embedding,
             output_dim=dim_embedding,
-            input_length=dim_input,
-            embeddings_regularizer=tf.keras.regularizers.l2(embedding_l2),
             name="embedding",
         )
 
         # wide part
-        self.wide = tf.keras.layers.Embedding(
+        self.wide = Embedding(
             input_dim=num_embedding,
             output_dim=1,
-            input_length=dim_input,
             name="wide_emb",
         )
 
@@ -40,7 +39,7 @@ class DeepWide(tf.keras.Model):
         self.deep = MLP(num_hidden=num_hidden, dim_hidden=dim_hidden, dim_out=1, dropout=dropout)
 
         # final layer
-        self.projection_head = tf.keras.layers.Dense(1, name="projection_head")
+        self.projection_head = Dense(1, name="projection_head")
 
     def call(self, inputs, training=None):
         embeddings = self.embedding(inputs, training=training)  # (bs, dim_input, dim_emb)
@@ -50,6 +49,6 @@ class DeepWide(tf.keras.Model):
         latent_deep = self.deep(embeddings, training=training)  # (bs, 1)
 
         logits = latent_deep + latent_wide  # (bs, 1)
-        output = tf.nn.sigmoid(logits)  # (bs, 1)
+        output = activations.sigmoid(logits)  # (bs, 1)
 
         return output

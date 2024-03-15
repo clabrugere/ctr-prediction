@@ -6,7 +6,7 @@ from models.pytorch.mlp import MLP
 
 
 class FeatureSelection(nn.Module):
-    def __init__(self, dim_input, num_hidden=1, dim_hidden=64, dropout=0.0):
+    def __init__(self, dim_input, num_hidden, dim_hidden, dropout):
         super().__init__()
 
         self.gate_1 = MLP(
@@ -38,7 +38,7 @@ class FeatureSelection(nn.Module):
 
 
 class Aggregation(nn.Module):
-    def __init__(self, dim_inputs_1, dim_inputs_2, num_heads=1):
+    def __init__(self, dim_inputs_1, dim_inputs_2, num_heads):
         super().__init__()
 
         self.num_heads = num_heads
@@ -77,13 +77,14 @@ class FinalMLP(nn.Module):
         self,
         dim_input,
         num_embedding,
-        dim_embedding=32,
-        dim_hidden_fs=64,
-        num_hidden_1=2,
-        dim_hidden_1=64,
-        num_hidden_2=2,
-        dim_hidden_2=64,
-        num_heads=1,
+        dim_embedding,
+        num_hidden_fs,
+        dim_hidden_fs,
+        num_hidden_1,
+        dim_hidden_1,
+        num_hidden_2,
+        dim_hidden_2,
+        num_heads,
         dropout=0.0,
     ):
         super().__init__()
@@ -97,6 +98,7 @@ class FinalMLP(nn.Module):
         # feature selection layer that projects a learnable vector to the flatened embedded feature space
         self.feature_selection = FeatureSelection(
             dim_input=dim_input * dim_embedding,
+            num_hidden=num_hidden_fs,
             dim_hidden=dim_hidden_fs,
             dropout=dropout,
         )

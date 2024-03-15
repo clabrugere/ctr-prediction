@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["models*"]
+exclude = ["tests*"]
+
+[project]
+name = "ctr-prediction"
+description = "Various models for CTR prediction tasks."
+authors = [{name = "Clément Labrugere"}]
+version = "0.1"
+license = {file = "LICENSE"}
+requires-python = ">=3.11"
+dependencies = ["torch>=2.2", "tensorflow>=2.16"]
+
+[project.optional-dependencies]
+tests = ["pytest>=8.1"]
+
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "INFO"

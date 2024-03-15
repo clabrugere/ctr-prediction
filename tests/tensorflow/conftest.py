@@ -64,6 +64,7 @@ def final_mlp_model() -> FinalMLP:
         dim_input=NUM_FEATURES,
         num_embedding=NUM_EMBEDDING,
         dim_embedding=8,
+        num_hidden_fs=1,
         dim_hidden_fs=8,
         num_hidden_1=3,
         dim_hidden_1=16,

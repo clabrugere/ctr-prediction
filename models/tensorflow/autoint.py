@@ -1,41 +1,43 @@
 import tensorflow as tf
+from keras import Model, Sequential, activations
+from keras.layers import Dense, Embedding, LayerNormalization, MultiHeadAttention
 
 from models.tensorflow.mlp import MLP
 
 
-class AttentionInteraction(tf.keras.Model):
-    def __init__(self, num_heads, dim_key, dropout=0.0, name="AttentionInteraction"):
+class AttentionInteraction(Model):
+    def __init__(self, num_heads, dim_key, dropout, name="AttentionInteraction"):
         super().__init__(name=name)
-        self.mha = tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=dim_key, dropout=dropout)
-        self.norm = tf.keras.layers.LayerNormalization()
+        self.mha = MultiHeadAttention(num_heads=num_heads, key_dim=dim_key, dropout=dropout)
+        self.norm = LayerNormalization()
 
     def call(self, inputs, training=None):
         return self.norm(self.mha(inputs, inputs, training=training) + inputs)
 
 
-class AttentionInteractionBlock(tf.keras.Sequential):
-    def __init__(self, num_layer, num_heads, dim_key, dropout=0.0):
+class AttentionInteractionBlock(Sequential):
+    def __init__(self, num_layer, num_heads, dim_key, dropout):
         super().__init__(
             [
-                AttentionInteraction(num_heads, dim_key, dropout=dropout, name=f"attn_interation_{i}")
+                AttentionInteraction(num_heads, dim_key, dropout=dropout, name=f"attn_interaction_{i}")
                 for i in range(num_layer)
             ]
         )
 
 
-class AutoInt(tf.keras.Model):
+class AutoInt(Model):
     __AGGREGATION_MODES = ["add", "concat"]
 
     def __init__(
         self,
         dim_input,
         num_embedding,
-        dim_embedding=8,
-        num_heads=1,
-        dim_key=16,
-        num_hidden=2,
-        dim_hidden=16,
-        num_attention=1,
+        dim_embedding,
+        num_heads,
+        dim_key,
+        num_hidden,
+        dim_hidden,
+        num_attention,
         dropout=0.0,
         aggregation_mode="add",
         name="AutoInt",
@@ -50,10 +52,9 @@ class AutoInt(tf.keras.Model):
         self.aggregation_mode = aggregation_mode
 
         # embedding layer
-        self.embedding = tf.keras.layers.Embedding(
+        self.embedding = Embedding(
             input_dim=num_embedding,
             output_dim=dim_embedding,
-            input_length=dim_input,
             name="embedding",
         )
 
@@ -71,9 +72,9 @@ class AutoInt(tf.keras.Model):
         )
 
         if aggregation_mode == "add":
-            self.attn_projection_head = tf.keras.layers.Dense(1, name="attn_projection_head")
+            self.attn_projection_head = Dense(1, name="attn_projection_head")
         elif aggregation_mode == "concat":
-            self.projection_head = tf.keras.layers.Dense(1, name="projection_head")
+            self.projection_head = Dense(1, name="projection_head")
 
     def call(self, inputs, training=None):
         embeddings = self.embedding(inputs, training=training)  # (bs, dim_input, dim_emb)
@@ -92,6 +93,6 @@ class AutoInt(tf.keras.Model):
             latent = tf.concat((attn_out, mlp_out), axis=-1)  # (bs, dim_input * dim_emb + dim_hidden)
             logits = self.projection_head(latent, training=training)  # (bs, 1)
 
-        outputs = tf.nn.sigmoid(logits)  # (bs, 1)
+        outputs = activations.sigmoid(logits)  # (bs, 1)
 
         return outputs

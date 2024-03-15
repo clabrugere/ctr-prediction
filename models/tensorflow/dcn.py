@@ -1,21 +1,23 @@
 import tensorflow as tf
+from keras import Model, activations
+from keras.layers import Dense, Dropout, Embedding, Layer
 
 from models.tensorflow.mlp import MLP
 
 
-class DCN(tf.keras.Model):
+class DCN(Model):
     __CROSS_VARIANTS = ["cross", "cross_mix"]
 
     def __init__(
         self,
         dim_input,
         num_embedding,
-        dim_embedding=8,
-        num_interaction=2,
-        num_expert=1,
-        dim_low=32,
-        num_hidden=2,
-        dim_hidden=16,
+        dim_embedding,
+        num_interaction,
+        num_expert,
+        dim_low,
+        num_hidden,
+        dim_hidden,
         dropout=0.0,
         parallel_mlp=True,
         cross_type="cross_mix",
@@ -31,29 +33,28 @@ class DCN(tf.keras.Model):
         self.dim_embedding = dim_embedding
 
         # embedding layer
-        self.embedding = tf.keras.layers.Embedding(
+        self.embedding = Embedding(
             input_dim=num_embedding,
             output_dim=dim_embedding,
-            input_length=dim_input,
             name="embedding",
         )
 
         # cross layer
         self.interaction_cross = []
         if cross_type == "cross_mix":
-            for _ in range(num_interaction):
+            for i in range(num_interaction):
                 self.interaction_cross.append(
-                    (CrossMixLayer(dim_low=dim_low, num_expert=num_expert), tf.keras.layers.Dropout(dropout))
+                    (CrossMixLayer(dim_low=dim_low, num_expert=num_expert, name=f"cross_mix_{i}"), Dropout(dropout))
                 )
         else:
             for _ in range(num_interaction):
-                self.interaction_cross.append((CrossLayer(), tf.keras.layers.Dropout(dropout)))
+                self.interaction_cross.append((CrossLayer(name=f"cross_{i}"), Dropout(dropout)))
 
         # mlp
         self.interaction_mlp = MLP(num_hidden=num_hidden, dim_hidden=dim_hidden, dropout=dropout)
 
         # final projection head
-        self.projection_head = tf.keras.layers.Dense(1, name="projection_head")
+        self.projection_head = Dense(1, name="projection_head")
 
     def call(self, inputs, training=False):
         embeddings = self.embedding(inputs, training=training)  # (bs, dim_input, dim_emb)
@@ -68,29 +69,29 @@ class DCN(tf.keras.Model):
             latent_mlp = self.interaction_mlp(embeddings, training=training)  # (bs, dim_hidden)
             latent = tf.concat((latent_cross, latent_mlp), axis=-1)  # (bs, dim_input * dim_emb + dim_hidden)
         else:
-            latent_cross = tf.nn.relu(latent_cross)  # (bs, dim_input * dim_emb)
+            latent_cross = activations.relu(latent_cross)  # (bs, dim_input * dim_emb)
             latent = self.interaction_mlp(latent_cross, training=training)  # (bs, dim_hidden)
 
         logits = self.projection_head(latent, training=training)  # (bs, 1)
-        outputs = tf.nn.sigmoid(logits)  # (bs, 1)
+        outputs = activations.sigmoid(logits)  # (bs, 1)
 
         return outputs
 
 
-class CrossLayer(tf.keras.layers.Layer):
+class CrossLayer(Layer):
     def __init__(
         self,
         weights_initializer="glorot_uniform",
         bias_initializer="zeros",
+        name="CrossLayer",
     ):
-        super().__init__()
+        super().__init__(name=name)
 
         self.weights_initializer = weights_initializer
         self.bias_initializer = bias_initializer
 
     def build(self, input_shape):
-        input_shape = tf.TensorShape(input_shape)
-        dim_input = tf.compat.dimension_value(input_shape[-1])
+        dim_input = input_shape[-1]
 
         self.W = self.add_weight(
             name="weights",
@@ -112,7 +113,7 @@ class CrossLayer(tf.keras.layers.Layer):
         return x_0 * (tf.matmul(x_l, self.W) + self.b) + x_l
 
 
-class CrossMixLayer(tf.keras.layers.Layer):
+class CrossMixLayer(Layer):
     def __init__(
         self,
         dim_low,
@@ -121,19 +122,19 @@ class CrossMixLayer(tf.keras.layers.Layer):
         weights_initializer="he_uniform",
         bias_initializer="zeros",
         gate_function="softmax",
+        name="CrossMixLayer",
     ):
-        super().__init__()
+        super().__init__(name=name)
 
         self.dim_low = dim_low
         self.num_experts = num_expert
         self.gate_function = gate_function
-        self.activation = tf.keras.activations.get(activation)
+        self.activation = activations.get(activation)
         self.weights_initializer = weights_initializer
         self.bias_initializer = bias_initializer
 
     def build(self, input_shape):
-        input_shape = tf.TensorShape(input_shape)
-        self.dim_input = tf.compat.dimension_value(input_shape[-1])
+        self.dim_input = input_shape[-1]
 
         self.U = self.add_weight(
             name="U",
@@ -164,7 +165,7 @@ class CrossMixLayer(tf.keras.layers.Layer):
             trainable=True,
         )
 
-        self.gate = tf.keras.layers.Dense(self.num_experts, activation=self.gate_function, use_bias=False)
+        self.gate = Dense(self.num_experts, activation=self.gate_function, use_bias=False)
         self.built = True
 
     def call(self, x_0, x_l, training=None):

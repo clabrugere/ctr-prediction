@@ -1,4 +1,3 @@
-import logging
 import math
 
 import torch
@@ -16,12 +15,12 @@ class DCN(nn.Module):
         self,
         dim_input,
         num_embedding,
-        dim_embedding=8,
-        num_interaction=2,
-        num_expert=1,
-        dim_low=32,
-        num_hidden=2,
-        dim_hidden=16,
+        dim_embedding,
+        num_interaction,
+        num_expert,
+        dim_low,
+        num_hidden,
+        dim_hidden,
         dropout=0.0,
         parallel_mlp=True,
         cross_type="cross_mix",
@@ -92,7 +91,7 @@ class DCN(nn.Module):
 
 
 class CrossLayer(nn.Module):
-    def __init__(self, dim_input, num_layers=1):
+    def __init__(self, dim_input, num_layers):
         super().__init__()
         self.layers = nn.ModuleList([nn.Linear(dim_input, dim_input) for _ in range(num_layers)])
 
@@ -139,7 +138,7 @@ class CrossMixBlock(nn.Module):
         self,
         dim_input,
         dim_low,
-        num_expert=1,
+        num_expert,
         dropout=0.0,
     ):
         super().__init__()

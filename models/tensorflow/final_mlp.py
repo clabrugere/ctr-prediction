@@ -1,49 +1,60 @@
 import tensorflow as tf
+from keras import Model, activations
+from keras.layers import Embedding, Layer
 
 from models.tensorflow.mlp import MLP
 
 
-class FeatureSelection(tf.keras.Model):
-    def __init__(self, dim_input, num_hidden=1, dim_hidden=64, dropout=0.0):
+class FeatureSelection(Layer):
+    def __init__(self, num_hidden, dim_hidden, dropout):
         super().__init__()
 
+        self.num_hidden = num_hidden
+        self.dim_hidden = dim_hidden
+        self.dropout = dropout
+
+    def build(self, input_shape):
+        dim_inputs = input_shape[-1]
+
         self.gate_1 = MLP(
-            num_hidden=num_hidden,
-            dim_hidden=dim_hidden,
-            dim_out=dim_input,
-            dropout=dropout,
+            num_hidden=self.num_hidden,
+            dim_hidden=self.dim_hidden,
+            dim_out=dim_inputs,
+            dropout=self.dropout,
             batch_norm=False,
             name="feature_selection_gate_1",
         )
 
         self.gate_2 = MLP(
-            num_hidden=num_hidden,
-            dim_hidden=dim_hidden,
-            dim_out=dim_input,
-            dropout=dropout,
+            num_hidden=self.num_hidden,
+            dim_hidden=self.dim_hidden,
+            dim_out=dim_inputs,
+            dropout=self.dropout,
             batch_norm=False,
             name="feature_selection_gate_2",
         )
 
+        self.built = True
+
     def call(self, inputs, training=None):
         gate_score_1 = self.gate_1(inputs, training=training)  # (1, dim_input)
-        out_1 = 2.0 * tf.nn.sigmoid(gate_score_1) * inputs  # (bs, dim_input)
+        out_1 = 2.0 * activations.sigmoid(gate_score_1) * inputs  # (bs, dim_input)
 
         gate_score_2 = self.gate_2(inputs, training=training)  # (1, dim_input)
-        out_2 = 2.0 * tf.nn.sigmoid(gate_score_2) * inputs  # (bs, dim_input)
+        out_2 = 2.0 * activations.sigmoid(gate_score_2) * inputs  # (bs, dim_input)
 
         return out_1, out_2  # (bs, dim_feature), (bs, dim_feature)
 
 
-class Aggregation(tf.keras.layers.Layer):
-    def __init__(self, num_heads=1):
+class Aggregation(Layer):
+    def __init__(self, num_heads):
         super().__init__()
         self.num_heads = num_heads
 
     def build(self, input_shapes):
         input_shape_1, input_shape_2 = input_shapes
-        dim_inputs_1 = tf.compat.dimension_value(tf.TensorShape(input_shape_1)[-1])
-        dim_inputs_2 = tf.compat.dimension_value(tf.TensorShape(input_shape_2)[-1])
+        dim_inputs_1 = input_shape_1[-1]
+        dim_inputs_2 = input_shape_2[-1]
 
         self.dim_head_1 = dim_inputs_1 // self.num_heads
         self.dim_head_2 = dim_inputs_2 // self.num_heads
@@ -85,18 +96,19 @@ class Aggregation(tf.keras.layers.Layer):
         return out
 
 
-class FinalMLP(tf.keras.Model):
+class FinalMLP(Model):
     def __init__(
         self,
         dim_input,
         num_embedding,
-        dim_embedding=32,
-        dim_hidden_fs=64,
-        num_hidden_1=2,
-        dim_hidden_1=64,
-        num_hidden_2=2,
-        dim_hidden_2=64,
-        num_heads=1,
+        dim_embedding,
+        num_hidden_fs,
+        dim_hidden_fs,
+        num_hidden_1,
+        dim_hidden_1,
+        num_hidden_2,
+        dim_hidden_2,
+        num_heads,
         dropout=0.0,
         name="FinalMLP",
     ):
@@ -106,16 +118,15 @@ class FinalMLP(tf.keras.Model):
         self.dim_embedding = dim_embedding
 
         # embedding layer
-        self.embedding = tf.keras.layers.Embedding(
+        self.embedding = Embedding(
             input_dim=num_embedding,
             output_dim=dim_embedding,
-            input_length=dim_input,
             name="embedding",
         )
 
         # feature selection layer that projects a learnable vector to the flatened embedded feature space
         self.feature_selection = FeatureSelection(
-            dim_input=dim_input * dim_embedding,
+            num_hidden=num_hidden_fs,
             dim_hidden=dim_hidden_fs,
             dropout=dropout,
         )
@@ -153,6 +164,6 @@ class FinalMLP(tf.keras.Model):
 
         # merge the representations using an aggregation scheme
         logits = self.aggregation([latent_1, latent_2])  # (bs, 1)
-        outputs = tf.nn.sigmoid(logits)  # (bs, 1)
+        outputs = activations.sigmoid(logits)  # (bs, 1)
 
         return outputs

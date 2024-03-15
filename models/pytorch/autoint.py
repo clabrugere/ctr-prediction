@@ -6,7 +6,7 @@ from models.pytorch.mlp import MLP
 
 
 class AttentionInteraction(nn.Module):
-    def __init__(self, dim_embedding, num_heads, dropout, **attn_kwargs):
+    def __init__(self, dim_embedding, num_heads, dropout=0.0, **attn_kwargs):
         super().__init__()
         self.mha = nn.MultiheadAttention(
             embed_dim=dim_embedding,
@@ -24,7 +24,7 @@ class AttentionInteraction(nn.Module):
 
 
 class AttentionBlock(nn.Sequential):
-    def __init__(self, num_blocks, dim_embedding, num_heads=1, dropout=0.0, **attn_kwargs):
+    def __init__(self, num_blocks, dim_embedding, num_heads, dropout, **attn_kwargs):
         blocks = []
         for _ in range(num_blocks):
             blocks.append(AttentionInteraction(dim_embedding, num_heads, dropout, **attn_kwargs))
@@ -39,11 +39,11 @@ class AutoInt(nn.Module):
         self,
         dim_input,
         num_embedding,
-        dim_embedding=8,
-        num_attention=1,
-        num_heads=1,
-        num_hidden=2,
-        dim_hidden=16,
+        dim_embedding,
+        num_attention,
+        num_heads,
+        num_hidden,
+        dim_hidden,
         dropout=0.0,
         aggregation_mode="add",
     ):

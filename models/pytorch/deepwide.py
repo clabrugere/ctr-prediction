@@ -10,9 +10,9 @@ class DeepWide(nn.Module):
         self,
         dim_input,
         num_embedding,
-        dim_embedding=8,
-        num_hidden=3,
-        dim_hidden=100,
+        dim_embedding,
+        num_hidden,
+        dim_hidden,
         dropout=0.0,
     ):
         super().__init__()
@@ -21,13 +21,9 @@ class DeepWide(nn.Module):
 
         self.embedding = nn.Embedding(num_embeddings=num_embedding, embedding_dim=dim_embedding)
         self.wide = nn.Embedding(num_embeddings=num_embedding, embedding_dim=1)
-        
+
         self.deep = MLP(
-            dim_in=dim_input * dim_embedding, 
-            num_hidden=num_hidden, 
-            dim_hidden=dim_hidden, 
-            dim_out=1, 
-            dropout=dropout
+            dim_in=dim_input * dim_embedding, num_hidden=num_hidden, dim_hidden=dim_hidden, dim_out=1, dropout=dropout
         )
 
     def forward(self, inputs):
@@ -37,7 +33,7 @@ class DeepWide(nn.Module):
         latent_deep = self.deep(embeddings)  # (bs, 1)
         latent_wide = torch.sum(self.wide(inputs), dim=1)  # (bs, 1)
 
-        logits = latent_deep + latent_wide # (bs, 1)
-        outputs = F.sigmoid(logits) # (bs, 1)
+        logits = latent_deep + latent_wide  # (bs, 1)
+        outputs = F.sigmoid(logits)  # (bs, 1)
 
         return outputs

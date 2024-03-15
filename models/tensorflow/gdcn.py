@@ -1,8 +1,11 @@
 import tensorflow as tf
+from keras import Model, activations
+from keras.layers import Dense, Embedding, Layer
+
 from models.tensorflow.mlp import MLP
 
 
-class GDCNS(tf.keras.Model):
+class GDCNS(Model):
     def __init__(
         self,
         dim_input,
@@ -11,7 +14,6 @@ class GDCNS(tf.keras.Model):
         num_cross,
         num_hidden,
         dim_hidden,
-        embedding_l2=0.0,
         dropout=0.0,
         name="GDCN",
     ):
@@ -19,11 +21,9 @@ class GDCNS(tf.keras.Model):
         self.dim_input = dim_input
         self.dim_embedding = dim_embedding
 
-        self.embedding = tf.keras.layers.Embedding(
+        self.embedding = Embedding(
             input_dim=num_embedding,
             output_dim=dim_embedding,
-            input_length=dim_input,
-            embeddings_regularizer=tf.keras.regularizers.l2(embedding_l2),
             name="embedding",
         )
 
@@ -36,12 +36,12 @@ class GDCNS(tf.keras.Model):
         out = tf.reshape(out, (-1, self.dim_input * self.dim_embedding))
         out = self.cross(out, training=training)
         out = self.projector(out, training=training)
-        out = tf.sigmoid(out)
+        out = activations.sigmoid(out)
 
         return out
 
 
-class GDCNP(tf.keras.Model):
+class GDCNP(Model):
     def __init__(
         self,
         dim_input,
@@ -50,7 +50,6 @@ class GDCNP(tf.keras.Model):
         num_cross,
         num_hidden,
         dim_hidden,
-        embedding_l2=0.0,
         dropout=0.0,
         name="GDCN",
     ):
@@ -58,17 +57,15 @@ class GDCNP(tf.keras.Model):
         self.dim_input = dim_input
         self.dim_embedding = dim_embedding
 
-        self.embedding = tf.keras.layers.Embedding(
+        self.embedding = Embedding(
             input_dim=num_embedding,
             output_dim=dim_embedding,
-            input_length=dim_input,
-            embeddings_regularizer=tf.keras.regularizers.l2(embedding_l2),
             name="embedding",
         )
 
         self.cross = GatedCrossNetwork(num_cross)
         self.mlp = MLP(num_hidden, dim_hidden, dropout=dropout)
-        self.projector = tf.keras.layers.Dense(1)
+        self.projector = Dense(1)
         self.build(input_shape=(None, dim_input))
 
     def call(self, inputs, training=None):
@@ -85,7 +82,7 @@ class GDCNP(tf.keras.Model):
         return out
 
 
-class GatedCrossNetwork(tf.keras.layers.Layer):
+class GatedCrossNetwork(Layer):
     def __init__(
         self, num_layers, weights_initializer="glorot_uniform", bias_initializer="zeros", name="GatedCrossNetwork"
     ):
